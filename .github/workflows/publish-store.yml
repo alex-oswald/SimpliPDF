@@ -1,0 +1,88 @@
+name: Publish to Microsoft Store
+
+# Trigger on semver2 tags without prerelease (e.g. 1.0.0, 2.3.1)
+# Prerelease tags like 1.0.0-beta.1 are filtered out by the job condition
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  build:
+    # Only run for stable releases (tag has no hyphen → no prerelease suffix)
+    if: ${{ !contains(github.ref_name, '-') }}
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  submit:
+    needs: build
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: windows-latest
+    steps:
+      - name: Download all MSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Submit to Microsoft Store
+        shell: pwsh
+        env:
+          MS_STORE_TENANT_ID: ${{ secrets.MS_STORE_TENANT_ID }}
+          MS_STORE_CLIENT_ID: ${{ secrets.MS_STORE_CLIENT_ID }}
+          MS_STORE_CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
+          MS_STORE_APP_ID: ${{ secrets.MS_STORE_APP_ID }}
+        run: |
+          $packages = Get-ChildItem -Recurse -Path artifacts -Filter "*.msix"
+          Write-Host "Found packages:"
+          $packages | ForEach-Object { Write-Host "  $_" }
+
+          # Authenticate with Partner Center
+          $body = @{
+            grant_type    = "client_credentials"
+            client_id     = $env:MS_STORE_CLIENT_ID
+            client_secret = $env:MS_STORE_CLIENT_SECRET
+            resource      = "https://manage.devcenter.microsoft.com"
+          }
+          $token = (Invoke-RestMethod -Method Post `
+            -Uri "https://login.microsoftonline.com/$env:MS_STORE_TENANT_ID/oauth2/token" `
+            -Body $body).access_token
+
+          $headers = @{ Authorization = "Bearer $token" }
+          $baseUrl = "https://manage.devcenter.microsoft.com/v1.0/my/applications/$env:MS_STORE_APP_ID"
+
+          # Create a new submission (cloned from the last published one)
+          $sub = Invoke-RestMethod -Method Post -Uri "$baseUrl/submissions" -Headers $headers
+          $subId = $sub.id
+          $uploadUrl = $sub.fileUploadUrl
+          Write-Host "Created submission $subId"
+
+          # Zip the MSIX packages
+          $zipPath = "packages.zip"
+          Compress-Archive -Path ($packages.FullName) -DestinationPath $zipPath
+
+          # Upload the zip to the blob URL
+          $zipBytes = [System.IO.File]::ReadAllBytes($zipPath)
+          Invoke-RestMethod -Method Put -Uri $uploadUrl `
+            -Headers @{ "x-ms-blob-type" = "BlockBlob" } `
+            -Body $zipBytes -ContentType "application/octet-stream"
+          Write-Host "Uploaded packages"
+
+          # Update submission package list
+          $sub.applicationPackages = @(
+            $packages | ForEach-Object {
+              @{ fileName = $_.Name; fileStatus = "PendingUpload" }
+            }
+          )
+
+          Invoke-RestMethod -Method Put `
+            -Uri "$baseUrl/submissions/$subId" `
+            -Headers ($headers + @{ "Content-Type" = "application/json" }) `
+            -Body ($sub | ConvertTo-Json -Depth 10)
+
+          # Commit the submission
+          Invoke-RestMethod -Method Post `
+            -Uri "$baseUrl/submissions/$subId/commit" `
+            -Headers $headers
+          Write-Host "Submission $subId committed — pending Store certification"

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Build and publish PDFPro for one or more architectures.
+    Build and publish SimplePDF for one or more architectures.
 
 .PARAMETER Architectures
     Target architectures. Defaults to x64.
@@ -33,13 +33,13 @@ foreach ($arch in $Architectures) {
     Write-Host "`n=== $Configuration | $arch ===" -ForegroundColor Cyan
 
     if ($Publish) {
-        dotnet publish "$root\PDFPro\PDFPro.csproj" `
+        dotnet publish "$root\SimplePDF\SimplePDF.csproj" `
             -c $Configuration `
             -p:Platform=$arch `
             -p:PublishReadyToRun=true `
             --self-contained
     } else {
-        dotnet build "$root\PDFPro\PDFPro.csproj" `
+        dotnet build "$root\SimplePDF\SimplePDF.csproj" `
             -c $Configuration `
             -p:Platform=$arch
     }

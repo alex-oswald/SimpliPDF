@@ -1,11 +1,11 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using PDFPro.Helpers;
-using PDFPro.ViewModels;
+using SimplePDF.Helpers;
+using SimplePDF.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 
-namespace PDFPro;
+namespace SimplePDF;
 
 public sealed partial class MainWindow : Window
 {

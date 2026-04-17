@@ -2,10 +2,10 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Printing;
-using PDFPro.Models;
+using SimplePDF.Models;
 using Windows.Graphics.Printing;
 
-namespace PDFPro.Helpers;
+namespace SimplePDF.Helpers;
 
 public class PrintHelper
 {
@@ -50,7 +50,7 @@ public class PrintHelper
 
     private void OnPrintTaskRequested(PrintManager sender, PrintTaskRequestedEventArgs args)
     {
-        var printTask = args.Request.CreatePrintTask("PDFPro Document", sourceArgs =>
+        var printTask = args.Request.CreatePrintTask("SimplePDF Document", sourceArgs =>
         {
             sourceArgs.SetSource(_printDocumentSource);
         });

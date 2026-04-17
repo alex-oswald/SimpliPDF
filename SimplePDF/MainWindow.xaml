@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Window
-    x:Class="PDFPro.MainWindow"
+    x:Class="SimplePDF.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:local="using:PDFPro"
-    xmlns:models="using:PDFPro.Models"
+    xmlns:local="using:SimplePDF"
+    xmlns:models="using:SimplePDF.Models"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    Title="PDFPro"
+    Title="SimplePDF"
     mc:Ignorable="d">
     <Window.SystemBackdrop>
         <MicaBackdrop />
@@ -22,7 +22,7 @@
         </Grid.RowDefinitions>
 
         <!-- Title Bar -->
-        <TitleBar x:Name="AppTitleBar" Title="PDFPro">
+        <TitleBar x:Name="AppTitleBar" Title="SimplePDF">
             <TitleBar.IconSource>
                 <ImageIconSource ImageSource="Assets/AppIcon.ico" />
             </TitleBar.IconSource>

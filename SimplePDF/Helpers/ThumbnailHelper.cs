@@ -2,7 +2,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Data.Pdf;
 using Windows.Storage.Streams;
 
-namespace PDFPro.Helpers;
+namespace SimplePDF.Helpers;
 
 public static class ThumbnailHelper
 {

@@ -1,6 +1,6 @@
 using Microsoft.UI.Xaml;
 
-namespace PDFPro;
+namespace SimplePDF;
 
 public partial class App : Application
 {

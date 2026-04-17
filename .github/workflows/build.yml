@@ -1,0 +1,60 @@
+name: Build MSIX
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version string (e.g. 1.0.0)'
+        required: false
+        type: string
+        default: '0.0.0'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      PROJECT: SimplePDF/SimplePDF.csproj
+
+    strategy:
+      matrix:
+        platform: [x64, ARM64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore ${{ env.PROJECT }} -p:Platform=${{ matrix.platform }}
+
+      - name: Build MSIX package
+        shell: pwsh
+        run: |
+          dotnet publish ${{ env.PROJECT }} `
+            -c Release `
+            -p:Platform=${{ matrix.platform }} `
+            -p:WindowsPackageType=MSIX `
+            -p:GenerateAppxPackageOnBuild=true `
+            -p:AppxPackageSigningEnabled=false `
+            -p:Version=${{ inputs.version }}.0
+
+      - name: Find MSIX
+        id: msix
+        shell: pwsh
+        run: |
+          $msix = Get-ChildItem -Recurse -Filter "*.msix" | Select-Object -First 1
+          if (-not $msix) { $msix = Get-ChildItem -Recurse -Filter "*.appx" | Select-Object -First 1 }
+          "path=$($msix.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SimplePDF-${{ matrix.platform }}
+          path: ${{ steps.msix.outputs.path }}

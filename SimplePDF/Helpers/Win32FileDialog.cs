@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace PDFPro.Helpers;
+namespace SimplePDF.Helpers;
 
 /// <summary>
 /// Win32 file dialogs — reliable in unpackaged WinUI 3 apps unlike the WinRT pickers.
