@@ -10,35 +10,84 @@
     IsPrimaryButtonEnabled="False"
     PrimaryButtonClick="OnPrimaryButtonClick">
 
-    <StackPanel Spacing="16" MinWidth="350">
+    <Grid MinWidth="500" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-        <!-- Scanner picker -->
-        <ComboBox x:Name="ScannerCombo"
-                  Header="Scanner"
-                  HorizontalAlignment="Stretch"
-                  PlaceholderText="Searching for scanners..."
-                  SelectionChanged="OnScannerSelectionChanged"
-                  DisplayMemberPath="Name" />
+        <!-- Settings row -->
+        <StackPanel Spacing="12">
+            <ComboBox x:Name="ScannerCombo"
+                      Header="Scanner"
+                      HorizontalAlignment="Stretch"
+                      PlaceholderText="Searching for scanners..."
+                      SelectionChanged="OnScannerSelectionChanged"
+                      DisplayMemberPath="Name" />
 
-        <!-- DPI -->
-        <ComboBox x:Name="DpiCombo"
-                  Header="Resolution (DPI)"
-                  HorizontalAlignment="Stretch"
-                  SelectedIndex="1">
-            <ComboBoxItem Content="150 DPI" Tag="150" />
-            <ComboBoxItem Content="300 DPI" Tag="300" />
-            <ComboBoxItem Content="600 DPI" Tag="600" />
-        </ComboBox>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-        <!-- Color mode -->
-        <ComboBox x:Name="ColorModeCombo"
-                  Header="Color mode"
-                  HorizontalAlignment="Stretch"
-                  SelectedIndex="0">
-            <ComboBoxItem Content="Color" Tag="1" />
-            <ComboBoxItem Content="Grayscale" Tag="2" />
-            <ComboBoxItem Content="Black &amp; White" Tag="4" />
-        </ComboBox>
+                <ComboBox x:Name="DpiCombo"
+                          Header="Resolution"
+                          HorizontalAlignment="Stretch"
+                          PlaceholderText="Select scanner first"
+                          IsEnabled="False" />
 
-    </StackPanel>
+                <ComboBox x:Name="ColorModeCombo"
+                          Grid.Column="1"
+                          Header="Color mode"
+                          HorizontalAlignment="Stretch"
+                          PlaceholderText="Select scanner first"
+                          IsEnabled="False" />
+            </Grid>
+
+            <Button x:Name="PreviewButton"
+                    Content="Preview"
+                    Click="OnPreviewClick"
+                    IsEnabled="False"
+                    HorizontalAlignment="Left" />
+        </StackPanel>
+
+        <!-- Progress bar -->
+        <ProgressBar x:Name="ScanProgress"
+                     Grid.Row="1"
+                     IsIndeterminate="True"
+                     Visibility="Collapsed" />
+
+        <!-- Preview image area -->
+        <Border Grid.Row="2"
+                MinHeight="300"
+                Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="8">
+            <Grid>
+                <!-- Placeholder text -->
+                <TextBlock x:Name="PreviewPlaceholder"
+                           Text="Click Preview to see a scan preview"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Opacity="0.5"
+                           Style="{StaticResource BodyTextBlockStyle}" />
+
+                <!-- Preview image -->
+                <Image x:Name="PreviewImage"
+                       Stretch="Uniform"
+                       Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <!-- Status text -->
+        <TextBlock x:Name="StatusText"
+                   Grid.Row="3"
+                   Style="{StaticResource CaptionTextBlockStyle}"
+                   Opacity="0.6" />
+    </Grid>
 </ContentDialog>

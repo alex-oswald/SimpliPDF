@@ -110,25 +110,13 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (result != ContentDialogResult.Primary || dialog.SelectedScanner == null)
+            if (result != ContentDialogResult.Primary || dialog.ScannedPdfPath == null)
                 return;
 
-            ViewModel.StatusText = "Scanning...";
             ViewModel.IsLoading = true;
             try
             {
-                var tempPdf = await SimplePDF.Services.ScanService.ScanAsync(
-                    dialog.SelectedScanner.DeviceId,
-                    dialog.SelectedDpi,
-                    dialog.SelectedColorMode);
-
-                if (tempPdf == null)
-                {
-                    ViewModel.StatusText = "Scan cancelled";
-                    return;
-                }
-
-                await ViewModel.LoadPdfAsync(tempPdf);
+                await ViewModel.LoadPdfAsync(dialog.ScannedPdfPath);
                 ViewModel.StatusText = "Scanned page added";
             }
             finally
