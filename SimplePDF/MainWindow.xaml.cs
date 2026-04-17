@@ -90,6 +90,35 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void OnScanClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            ViewModel.StatusText = "Scanning...";
+            var tempPdf = await SimplePDF.Services.ScanService.ScanToTempPdfAsync();
+            if (tempPdf == null)
+            {
+                ViewModel.StatusText = "Scan cancelled";
+                return;
+            }
+
+            ViewModel.IsLoading = true;
+            try
+            {
+                await ViewModel.LoadPdfAsync(tempPdf);
+                ViewModel.StatusText = "Scanned page added";
+            }
+            finally
+            {
+                ViewModel.IsLoading = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            ViewModel.StatusText = $"Scan error: {ex.Message}";
+        }
+    }
+
     private async void OnSaveClick(object sender, RoutedEventArgs e)
     {
         if (ViewModel.Pages.Count == 0) return;

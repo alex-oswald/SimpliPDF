@@ -36,6 +36,11 @@
                     <KeyboardAccelerator Modifiers="Control" Key="O" />
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
+            <AppBarButton Label="Scan" Click="OnScanClick">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE8FE;" />
+                </AppBarButton.Icon>
+            </AppBarButton>
             <AppBarButton Icon="Save" Label="Save" Click="OnSaveClick"
                           KeyboardAcceleratorTextOverride="Ctrl+S">
                 <AppBarButton.KeyboardAccelerators>
