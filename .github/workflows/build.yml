@@ -37,12 +37,15 @@ jobs:
       - name: Build MSIX package
         shell: pwsh
         run: |
+          $certPath = Resolve-Path "SimplePDF_Dev.pfx"
           dotnet publish ${{ env.PROJECT }} `
             -c Release `
             -p:Platform=${{ matrix.platform }} `
             -p:WindowsPackageType=MSIX `
             -p:GenerateAppxPackageOnBuild=true `
-            -p:AppxPackageSigningEnabled=false `
+            -p:AppxPackageSigningEnabled=true `
+            -p:PackageCertificateKeyFile="$certPath" `
+            -p:PackageCertificatePassword="" `
             -p:Version=${{ inputs.version }}.0
 
       - name: Find MSIX

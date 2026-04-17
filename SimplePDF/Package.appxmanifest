@@ -10,7 +10,7 @@
 
   <Identity
     Name="C848F1F4-AD6D-45FD-95B2-B842672ED9CC"
-    Publisher="CN=AppPublisher"
+    Publisher="CN=SimplePDF Dev"
     Version="1.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="C848F1F4-AD6D-45FD-95B2-B842672ED9CC" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>

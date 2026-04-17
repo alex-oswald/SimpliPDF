@@ -3,18 +3,21 @@
     Build and publish SimplePDF for one or more architectures.
 
 .PARAMETER Architectures
-    Target architectures. Defaults to x64.
+    Target architectures. Defaults to arm64.
 
 .PARAMETER Configuration
-    Build configuration. Defaults to Release.
+    Build configuration. Defaults to Debug.
 
 .PARAMETER Publish
     If set, publishes a self-contained app instead of just building.
 
+.PARAMETER Msix
+    If set, builds a signed MSIX package using the dev certificate.
+
 .EXAMPLE
-    .\build.ps1                              # Build x64 Debug
-    .\build.ps1 -Configuration Release       # Build x64 Release
-    .\build.ps1 -Architectures x64,arm64 -Publish  # Publish x64 and ARM64
+    .\build.ps1                              # Build arm64 Debug
+    .\build.ps1 -Configuration Release       # Build arm64 Release
+    .\build.ps1 -Architectures x64,arm64 -Msix  # Build signed MSIX for both
 #>
 param(
     [ValidateSet("x64", "x86", "arm64")]
@@ -23,16 +26,27 @@ param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Debug",
 
-    [switch]$Publish
+    [switch]$Publish,
+    [switch]$Msix
 )
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
+$certPath = Join-Path $root "SimplePDF_Dev.pfx"
 
 foreach ($arch in $Architectures) {
     Write-Host "`n=== $Configuration | $arch ===" -ForegroundColor Cyan
 
-    if ($Publish) {
+    if ($Msix) {
+        dotnet publish "$root\SimplePDF\SimplePDF.csproj" `
+            -c $Configuration `
+            -p:Platform=$arch `
+            -p:WindowsPackageType=MSIX `
+            -p:GenerateAppxPackageOnBuild=true `
+            -p:AppxPackageSigningEnabled=true `
+            -p:PackageCertificateKeyFile="$certPath" `
+            -p:PackageCertificatePassword=""
+    } elseif ($Publish) {
         dotnet publish "$root\SimplePDF\SimplePDF.csproj" `
             -c $Configuration `
             -p:Platform=$arch `
