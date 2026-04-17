@@ -1,10 +1,11 @@
-GetOpenFileName
-GetSaveFileName
 CoCreateInstance
 IFileOpenDialog
+IFileSaveDialog
 IShellItem
+IShellItemArray
 FILEOPENDIALOGOPTIONS
 SIGDN
+COMDLG_FILTERSPEC
 SetWindowSubclass
 DefSubclassProc
 RemoveWindowSubclass

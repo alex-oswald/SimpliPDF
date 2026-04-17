@@ -36,32 +36,26 @@
                     <KeyboardAccelerator Modifiers="Control" Key="O" />
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
-            <AppBarButton Label="Scan" Click="OnScanClick">
+            <AppBarButton x:Name="ScanBtn" Label="Scan" Click="OnScanClick" IsEnabled="False">
                 <AppBarButton.Icon>
                     <FontIcon Glyph="&#xE8FE;" />
                 </AppBarButton.Icon>
             </AppBarButton>
-            <AppBarButton Icon="Save" Label="Save" Click="OnSaveClick"
-                          KeyboardAcceleratorTextOverride="Ctrl+S">
-                <AppBarButton.KeyboardAccelerators>
-                    <KeyboardAccelerator Modifiers="Control" Key="S" />
-                </AppBarButton.KeyboardAccelerators>
-            </AppBarButton>
-            <AppBarButton Icon="Print" Label="Print" Click="OnPrintClick"
-                          KeyboardAcceleratorTextOverride="Ctrl+P">
+            <AppBarButton x:Name="PrintBtn" Icon="Print" Label="Print" Click="OnPrintClick"
+                          IsEnabled="False" KeyboardAcceleratorTextOverride="Ctrl+P">
                 <AppBarButton.KeyboardAccelerators>
                     <KeyboardAccelerator Modifiers="Control" Key="P" />
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
             <AppBarSeparator />
-            <AppBarButton Icon="Delete" Label="Delete" Click="OnDeleteClick"
-                          KeyboardAcceleratorTextOverride="Del">
+            <AppBarButton x:Name="DeleteBtn" Icon="Delete" Label="Delete" Click="OnDeleteClick"
+                          IsEnabled="False" KeyboardAcceleratorTextOverride="Del">
                 <AppBarButton.KeyboardAccelerators>
                     <KeyboardAccelerator Key="Delete" />
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
-            <AppBarButton Label="Rotate" Click="OnRotateClick"
-                          KeyboardAcceleratorTextOverride="Ctrl+R">
+            <AppBarButton x:Name="RotateBtn" Label="Rotate" Click="OnRotateClick"
+                          IsEnabled="False" KeyboardAcceleratorTextOverride="Ctrl+R">
                 <AppBarButton.Icon>
                     <FontIcon Glyph="&#xE7AD;" />
                 </AppBarButton.Icon>
@@ -69,16 +63,30 @@
                     <KeyboardAccelerator Modifiers="Control" Key="R" />
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
+            <AppBarButton x:Name="DeselectBtn" Label="Deselect All" Click="OnDeselectAllClick"
+                          IsEnabled="False">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE8E6;" />
+                </AppBarButton.Icon>
+            </AppBarButton>
             <AppBarSeparator />
-            <AppBarButton Label="Split All" Click="OnSplitClick">
+            <AppBarButton x:Name="SplitBtn" Label="Split All" Click="OnSplitClick"
+                          IsEnabled="False">
                 <AppBarButton.Icon>
                     <FontIcon Glyph="&#xE8A9;" />
                 </AppBarButton.Icon>
             </AppBarButton>
-            <AppBarButton Label="Extract" Click="OnExtractClick">
+            <AppBarButton x:Name="ExtractBtn" Label="Save Page" Click="OnExtractClick"
+                          IsEnabled="False">
                 <AppBarButton.Icon>
                     <FontIcon Glyph="&#xE8B5;" />
                 </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton x:Name="SaveBtn" Icon="Save" Label="Save Merged" Click="OnSaveClick"
+                          IsEnabled="False" KeyboardAcceleratorTextOverride="Ctrl+S">
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control" Key="S" />
+                </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
         </CommandBar>
 
@@ -115,17 +123,18 @@
                       Padding="12">
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:PdfPageItem">
-                        <Grid Width="150" Padding="4" RowSpacing="4"
+                        <Grid Width="{x:Bind CardWidth, Mode=OneWay}" Padding="4" RowSpacing="4"
                               Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                               BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                               BorderThickness="1" CornerRadius="4">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="180" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <Image Source="{x:Bind Thumbnail, Mode=OneWay}"
                                    Stretch="Uniform"
+                                   Height="{x:Bind ImageHeight, Mode=OneWay}"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    RenderTransformOrigin="0.5,0.5">

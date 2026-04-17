@@ -35,8 +35,29 @@ public sealed partial class MainWindow : Window
         _subclassProc = SubclassProc;
         PInvoke.SetWindowSubclass(new HWND(Hwnd), _subclassProc, 0, 0);
 
-        ViewModel.Pages.CollectionChanged += (_, _) => UpdateVisibility();
-        UpdateVisibility();
+        ViewModel.Pages.CollectionChanged += (_, _) => UpdateButtonStates();
+        PagesGridView.SelectionChanged += (_, _) => UpdateButtonStates();
+        UpdateButtonStates();
+
+        _ = DiscoverScannersAsync();
+    }
+
+    private async Task DiscoverScannersAsync()
+    {
+        ViewModel.StatusText = "Discovering scanners...";
+        try
+        {
+            var scanners = await SimplePDF.Services.ScanService.GetScannersAsync();
+            ScanBtn.IsEnabled = true;
+            ViewModel.StatusText = scanners.Count > 0
+                ? $"Found {scanners.Count} scanner{(scanners.Count != 1 ? "s" : "")}"
+                : "No scanners found";
+        }
+        catch
+        {
+            ScanBtn.IsEnabled = true;
+            ViewModel.StatusText = "Scanner discovery failed";
+        }
     }
 
     private LRESULT SubclassProc(HWND hWnd, uint uMsg, WPARAM wParam, LPARAM lParam, nuint uIdSubclass, nuint dwRefData)
@@ -57,11 +78,28 @@ public sealed partial class MainWindow : Window
         return PInvoke.DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
 
-    private void UpdateVisibility()
+    private void UpdateButtonStates()
     {
-        EmptyState.Visibility = ViewModel.Pages.Count > 0
-            ? Visibility.Collapsed
-            : Visibility.Visible;
+        int pageCount = ViewModel.Pages.Count;
+        int selectedCount = PagesGridView.SelectedItems.Count;
+        bool hasPages = pageCount > 0;
+        bool hasSelection = selectedCount > 0;
+
+        // Empty state
+        EmptyState.Visibility = hasPages ? Visibility.Collapsed : Visibility.Visible;
+
+        // Buttons that need pages
+        SaveBtn.IsEnabled = hasPages;
+        PrintBtn.IsEnabled = hasPages;
+
+        // Buttons that need selection
+        DeleteBtn.IsEnabled = hasSelection;
+        RotateBtn.IsEnabled = hasSelection;
+        ExtractBtn.IsEnabled = hasSelection;
+        DeselectBtn.IsEnabled = hasSelection;
+
+        // Split needs 2+ pages
+        SplitBtn.IsEnabled = pageCount >= 2;
     }
 
     // --- File operations using Win32 dialogs ---
@@ -166,6 +204,11 @@ public sealed partial class MainWindow : Window
     {
         if (PagesGridView.SelectedItems.Count == 0) return;
         ViewModel.RotatePages(PagesGridView.SelectedItems);
+    }
+
+    private void OnDeselectAllClick(object sender, RoutedEventArgs e)
+    {
+        PagesGridView.SelectedItems.Clear();
     }
 
     private async void OnSplitClick(object sender, RoutedEventArgs e)

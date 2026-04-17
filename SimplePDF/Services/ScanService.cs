@@ -31,9 +31,29 @@ public static class ScanService
         try { Directory.Delete(ScratchFolder, recursive: true); } catch { }
     }
 
+    // --- Prefetch cache ---
+
+    private static Task<List<ScannerInfo>>? _scannersTask;
+    private static readonly Dictionary<string, Task<ScannerCapabilities>> _capsCache = [];
+
+    /// <summary>Start prefetching scanner list and capabilities in the background.</summary>
+    public static void Prefetch()
+    {
+        _ = GetScannersAsync();
+    }
+
     public static Task<List<ScannerInfo>> GetScannersAsync()
     {
-        return RunOnStaThread(() =>
+        // Return cached task if already in flight or completed
+        if (_scannersTask != null) return _scannersTask;
+
+        _scannersTask = FetchScannersAndCacheCapabilities();
+        return _scannersTask;
+    }
+
+    private static async Task<List<ScannerInfo>> FetchScannersAndCacheCapabilities()
+    {
+        var scanners = await RunOnStaThread(() =>
         {
             var result = new List<ScannerInfo>();
             var dmType = Type.GetTypeFromProgID("WIA.DeviceManager");
@@ -48,7 +68,6 @@ public static class ScanService
                     if (type != 1 && type != 2) continue;
 
                     string id = info.DeviceID;
-                    // Try multiple approaches to get the device name
                     string name = GetDeviceName(info);
                     result.Add(new ScannerInfo(id, name));
                 }
@@ -56,6 +75,19 @@ public static class ScanService
             }
             return result;
         });
+
+        // Kick off capabilities queries for all found scanners
+        foreach (var scanner in scanners)
+            _ = GetCapabilitiesAsync(scanner.DeviceId);
+
+        return scanners;
+    }
+
+    /// <summary>Invalidate the cache so the next call re-queries devices.</summary>
+    public static void InvalidateCache()
+    {
+        _scannersTask = null;
+        lock (_capsCache) _capsCache.Clear();
     }
 
     private static string GetDeviceName(dynamic deviceInfo)
@@ -81,7 +113,13 @@ public static class ScanService
     /// <summary>Query supported DPI values and color modes from the scanner.</summary>
     public static Task<ScannerCapabilities> GetCapabilitiesAsync(string deviceId)
     {
-        return RunOnStaThread(() =>
+        lock (_capsCache)
+        {
+            if (_capsCache.TryGetValue(deviceId, out var cached))
+                return cached;
+        }
+
+        var task = RunOnStaThread(() =>
         {
             var dpiValues = new List<int>();
             var colorModes = new List<ScanColorMode>();
@@ -103,12 +141,18 @@ public static class ScanService
             }
             catch { }
 
-            // Fallback if we got nothing
             if (dpiValues.Count == 0) dpiValues = [150, 300, 600];
             if (colorModes.Count == 0) colorModes = [ScanColorMode.Color, ScanColorMode.Grayscale, ScanColorMode.BlackAndWhite];
 
             return new ScannerCapabilities(dpiValues, colorModes);
         });
+
+        lock (_capsCache)
+        {
+            _capsCache.TryAdd(deviceId, task);
+        }
+
+        return task;
     }
 
     private static List<int> ReadSupportedValues(dynamic properties, int propertyId)
