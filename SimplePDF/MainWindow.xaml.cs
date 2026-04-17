@@ -4,6 +4,10 @@ using SimplePDF.Helpers;
 using SimplePDF.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.UI.Shell;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace SimplePDF;
 
@@ -11,6 +15,12 @@ public sealed partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; } = new();
     private IntPtr Hwnd => WinRT.Interop.WindowNative.GetWindowHandle(this);
+
+    private const int MinWidthDip = 400;
+    private const int MinHeightDip = 300;
+
+    // Must be stored as a field to prevent GC collection of the delegate
+    private readonly SUBCLASSPROC _subclassProc;
 
     public MainWindow()
     {
@@ -21,8 +31,30 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1100, 750));
 
+        // Install subclass to enforce minimum window size
+        _subclassProc = SubclassProc;
+        PInvoke.SetWindowSubclass(new HWND(Hwnd), _subclassProc, 0, 0);
+
         ViewModel.Pages.CollectionChanged += (_, _) => UpdateVisibility();
         UpdateVisibility();
+    }
+
+    private LRESULT SubclassProc(HWND hWnd, uint uMsg, WPARAM wParam, LPARAM lParam, nuint uIdSubclass, nuint dwRefData)
+    {
+        const uint WM_GETMINMAXINFO = 0x0024;
+
+        if (uMsg == WM_GETMINMAXINFO)
+        {
+            var dpi = PInvoke.GetDpiForWindow(hWnd);
+            var scale = dpi / 96.0;
+
+            var minMax = System.Runtime.InteropServices.Marshal.PtrToStructure<MINMAXINFO>(lParam);
+            minMax.ptMinTrackSize.X = (int)(MinWidthDip * scale);
+            minMax.ptMinTrackSize.Y = (int)(MinHeightDip * scale);
+            System.Runtime.InteropServices.Marshal.StructureToPtr(minMax, lParam, false);
+        }
+
+        return PInvoke.DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
 
     private void UpdateVisibility()

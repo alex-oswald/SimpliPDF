@@ -1,4 +1,12 @@
 GetOpenFileName
 GetSaveFileName
-SHBrowseForFolder
-SHGetPathFromIDList
+CoCreateInstance
+IFileOpenDialog
+IShellItem
+FILEOPENDIALOGOPTIONS
+SIGDN
+SetWindowSubclass
+DefSubclassProc
+RemoveWindowSubclass
+MINMAXINFO
+GetDpiForWindow

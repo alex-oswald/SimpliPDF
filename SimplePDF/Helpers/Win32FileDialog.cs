@@ -100,52 +100,31 @@ public static class Win32FileDialog
 
     public static string? PickFolder(IntPtr hwnd)
     {
-        var displayName = new char[260];
-        var titleChars = "Select output folder\0".ToCharArray();
-        var displayPin = GCHandle.Alloc(displayName, GCHandleType.Pinned);
-        var titlePin = GCHandle.Alloc(titleChars, GCHandleType.Pinned);
+        // Use IFileOpenDialog COM interface for folder picking
+        var clsid = new Guid("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7"); // CLSID_FileOpenDialog
+        var iid = typeof(Windows.Win32.UI.Shell.IFileOpenDialog).GUID;
+        PInvoke.CoCreateInstance(in clsid, null, Windows.Win32.System.Com.CLSCTX.CLSCTX_INPROC_SERVER, in iid, out var ppv);
+        if (ppv is not Windows.Win32.UI.Shell.IFileOpenDialog dialog)
+            return null;
 
         try
         {
-            var bi = new Windows.Win32.UI.Shell.BROWSEINFOW
-            {
-                hwndOwner = new HWND(hwnd),
-                ulFlags = 0x0001 | 0x0040, // BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE
-            };
-            SetPwstr(ref bi.pszDisplayName, displayPin.AddrOfPinnedObject());
-            SetPcwstr(ref bi.lpszTitle, titlePin.AddrOfPinnedObject());
+            dialog.GetOptions(out var options);
+            dialog.SetOptions(options | Windows.Win32.UI.Shell.FILEOPENDIALOGOPTIONS.FOS_PICKFOLDERS);
+            dialog.SetTitle("Select output folder");
 
-            var pidlPtr = SHBrowseForFolderMarshal(ref bi);
-            if (pidlPtr == IntPtr.Zero) return null;
+            try { dialog.Show(new HWND(hwnd)); }
+            catch { return null; }
 
-            try
-            {
-                var pathBuffer = new char[260];
-                if (SHGetPathFromIDListMarshal(pidlPtr, pathBuffer))
-                {
-                    var end = Array.IndexOf(pathBuffer, '\0');
-                    return new string(pathBuffer, 0, end >= 0 ? end : pathBuffer.Length);
-                }
-                return null;
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(pidlPtr);
-            }
+            dialog.GetResult(out var item);
+            item.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_FILESYSPATH, out var path);
+            return path.ToString();
         }
-        finally
+        catch
         {
-            displayPin.Free();
-            titlePin.Free();
+            return null;
         }
     }
-
-    // Marshaled overloads for folder picker — avoids unsafe pointers for ITEMIDLIST*
-    [DllImport("shell32.dll", EntryPoint = "SHBrowseForFolderW", CharSet = CharSet.Unicode)]
-    private static extern IntPtr SHBrowseForFolderMarshal(ref Windows.Win32.UI.Shell.BROWSEINFOW lpbi);
-
-    [DllImport("shell32.dll", EntryPoint = "SHGetPathFromIDListW", CharSet = CharSet.Unicode)]
-    private static extern bool SHGetPathFromIDListMarshal(IntPtr pidl, [MarshalAs(UnmanagedType.LPArray)] char[] pszPath);
 
     // Helper to set PWSTR/PCWSTR fields from pinned addresses without unsafe
     private static void SetPwstr(ref PWSTR target, IntPtr addr)
