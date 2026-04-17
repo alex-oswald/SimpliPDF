@@ -27,9 +27,9 @@ public sealed partial class MainWindow : Window
 
     private void UpdateVisibility()
     {
-        var hasPages = ViewModel.Pages.Count > 0;
-        EmptyState.Visibility = hasPages ? Visibility.Collapsed : Visibility.Visible;
-        PagesGridView.Visibility = hasPages ? Visibility.Visible : Visibility.Collapsed;
+        EmptyState.Visibility = ViewModel.Pages.Count > 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     // --- File operations using Win32 dialogs ---
