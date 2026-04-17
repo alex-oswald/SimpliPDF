@@ -1,0 +1,35 @@
+# Build outputs
+bin/
+obj/
+publish/
+
+# IDE / VS
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# NuGet
+*.nupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+# MSIX
+*.msix
+*.appx
+AppPackages/
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Node (icon generation)
+node_modules/
+package.json
+package-lock.json
+
+# Crash logs
+crash.log
