@@ -43,6 +43,10 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="*" />
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.275">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="*" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="*" />
     <PackageReference Include="PDFsharp" Version="*" />

@@ -1,0 +1,4 @@
+GetOpenFileName
+GetSaveFileName
+SHBrowseForFolder
+SHGetPathFromIDList
