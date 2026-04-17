@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="SimplePDF.Dialogs.ScanDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Scan"
+    PrimaryButtonText="Scan"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    IsPrimaryButtonEnabled="False"
+    PrimaryButtonClick="OnPrimaryButtonClick">
+
+    <StackPanel Spacing="16" MinWidth="350">
+
+        <!-- Scanner picker -->
+        <ComboBox x:Name="ScannerCombo"
+                  Header="Scanner"
+                  HorizontalAlignment="Stretch"
+                  PlaceholderText="Searching for scanners..."
+                  SelectionChanged="OnScannerSelectionChanged"
+                  DisplayMemberPath="Name" />
+
+        <!-- DPI -->
+        <ComboBox x:Name="DpiCombo"
+                  Header="Resolution (DPI)"
+                  HorizontalAlignment="Stretch"
+                  SelectedIndex="1">
+            <ComboBoxItem Content="150 DPI" Tag="150" />
+            <ComboBoxItem Content="300 DPI" Tag="300" />
+            <ComboBoxItem Content="600 DPI" Tag="600" />
+        </ComboBox>
+
+        <!-- Color mode -->
+        <ComboBox x:Name="ColorModeCombo"
+                  Header="Color mode"
+                  HorizontalAlignment="Stretch"
+                  SelectedIndex="0">
+            <ComboBoxItem Content="Color" Tag="1" />
+            <ComboBoxItem Content="Grayscale" Tag="2" />
+            <ComboBoxItem Content="Black &amp; White" Tag="4" />
+        </ComboBox>
+
+    </StackPanel>
+</ContentDialog>

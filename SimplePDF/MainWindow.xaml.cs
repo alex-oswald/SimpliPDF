@@ -94,17 +94,40 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            ViewModel.StatusText = "Scanning...";
-            var tempPdf = await SimplePDF.Services.ScanService.ScanToTempPdfAsync();
-            if (tempPdf == null)
+            var dialog = new SimplePDF.Dialogs.ScanDialog { XamlRoot = Content.XamlRoot };
+            var result = await dialog.ShowAsync();
+
+            if (dialog.NoScannersFound)
             {
-                ViewModel.StatusText = "Scan cancelled";
+                var errorDialog = new ContentDialog
+                {
+                    XamlRoot = Content.XamlRoot,
+                    Title = "No scanners found",
+                    Content = "Connect a scanner to your computer and try again.",
+                    CloseButtonText = "OK",
+                };
+                await errorDialog.ShowAsync();
                 return;
             }
 
+            if (result != ContentDialogResult.Primary || dialog.SelectedScanner == null)
+                return;
+
+            ViewModel.StatusText = "Scanning...";
             ViewModel.IsLoading = true;
             try
             {
+                var tempPdf = await SimplePDF.Services.ScanService.ScanAsync(
+                    dialog.SelectedScanner.DeviceId,
+                    dialog.SelectedDpi,
+                    dialog.SelectedColorMode);
+
+                if (tempPdf == null)
+                {
+                    ViewModel.StatusText = "Scan cancelled";
+                    return;
+                }
+
                 await ViewModel.LoadPdfAsync(tempPdf);
                 ViewModel.StatusText = "Scanned page added";
             }

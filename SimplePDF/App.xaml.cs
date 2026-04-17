@@ -12,6 +12,11 @@ public partial class App : Application
         UnhandledException += OnUnhandledException;
     }
 
+    ~App()
+    {
+        Services.ScanService.Cleanup();
+    }
+
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         System.IO.File.AppendAllText(
