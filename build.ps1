@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Build and publish SimplePDF for one or more architectures.
+    Build and publish SimpliPDF for one or more architectures.
 
 .PARAMETER Architectures
     Target architectures. Defaults to arm64.
@@ -32,13 +32,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
-$certPath = Join-Path $root "SimplePDF_Dev.pfx"
+$certPath = Join-Path $root "SimpliPDF_Dev.pfx"
 
 foreach ($arch in $Architectures) {
     Write-Host "`n=== $Configuration | $arch ===" -ForegroundColor Cyan
 
     if ($Msix) {
-        dotnet publish "$root\SimplePDF\SimplePDF.csproj" `
+        dotnet publish "$root\SimpliPDF\SimpliPDF.csproj" `
             -c $Configuration `
             -p:Platform=$arch `
             -p:WindowsPackageType=MSIX `
@@ -47,13 +47,13 @@ foreach ($arch in $Architectures) {
             -p:PackageCertificateKeyFile="$certPath" `
             -p:PackageCertificatePassword=""
     } elseif ($Publish) {
-        dotnet publish "$root\SimplePDF\SimplePDF.csproj" `
+        dotnet publish "$root\SimpliPDF\SimpliPDF.csproj" `
             -c $Configuration `
             -p:Platform=$arch `
             -p:PublishReadyToRun=true `
             --self-contained
     } else {
-        dotnet build "$root\SimplePDF\SimplePDF.csproj" `
+        dotnet build "$root\SimpliPDF\SimpliPDF.csproj" `
             -c $Configuration `
             -p:Platform=$arch
     }

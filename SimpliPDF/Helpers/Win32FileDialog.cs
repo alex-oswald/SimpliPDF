@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 
-namespace SimplePDF.Helpers;
+namespace SimpliPDF.Helpers;
 
 /// <summary>
 /// Win32 file dialogs via CsWin32 COM — reliable in unpackaged WinUI 3 apps.

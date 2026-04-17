@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using SimplePDF.Helpers;
-using SimplePDF.Models;
-using SimplePDF.Services;
+using SimpliPDF.Helpers;
+using SimpliPDF.Models;
+using SimpliPDF.Services;
 
-namespace SimplePDF.ViewModels;
+namespace SimpliPDF.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {

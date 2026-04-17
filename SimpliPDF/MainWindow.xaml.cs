@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using SimplePDF.Helpers;
-using SimplePDF.ViewModels;
+using SimpliPDF.Helpers;
+using SimpliPDF.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Win32;
@@ -9,7 +9,7 @@ using Windows.Win32.Foundation;
 using Windows.Win32.UI.Shell;
 using Windows.Win32.UI.WindowsAndMessaging;
 
-namespace SimplePDF;
+namespace SimpliPDF;
 
 public sealed partial class MainWindow : Window
 {
@@ -47,7 +47,7 @@ public sealed partial class MainWindow : Window
         ViewModel.StatusText = "Discovering scanners...";
         try
         {
-            var scanners = await SimplePDF.Services.ScanService.GetScannersAsync();
+            var scanners = await SimpliPDF.Services.ScanService.GetScannersAsync();
             ScanBtn.IsEnabled = true;
             ViewModel.StatusText = scanners.Count > 0
                 ? $"Found {scanners.Count} scanner{(scanners.Count != 1 ? "s" : "")}"
@@ -132,7 +132,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var dialog = new SimplePDF.Dialogs.ScanDialog { XamlRoot = Content.XamlRoot };
+            var dialog = new SimpliPDF.Dialogs.ScanDialog { XamlRoot = Content.XamlRoot };
             var result = await dialog.ShowAsync();
 
             if (dialog.NoScannersFound)

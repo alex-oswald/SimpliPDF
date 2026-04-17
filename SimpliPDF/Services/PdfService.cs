@@ -1,8 +1,8 @@
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
-using SimplePDF.Models;
+using SimpliPDF.Models;
 
-namespace SimplePDF.Services;
+namespace SimpliPDF.Services;
 
 public class PdfService
 {

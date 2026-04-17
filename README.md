@@ -1,4 +1,4 @@
-# SimplePDF
+# SimpliPDF
 
 A lightweight WinUI 3 desktop app for merging, reordering, and editing PDF pages.
 
@@ -17,7 +17,7 @@ A lightweight WinUI 3 desktop app for merging, reordering, and editing PDF pages
 
 ## Screenshot
 
-![SimplePDF](https://github.com/user-attachments/assets/placeholder.png)
+![SimpliPDF](https://github.com/user-attachments/assets/placeholder.png)
 
 ## Requirements
 
@@ -29,7 +29,7 @@ A lightweight WinUI 3 desktop app for merging, reordering, and editing PDF pages
 The MSIX packages are signed with a self-signed development certificate.
 Before installing, you need to trust the certificate once:
 
-1. Download `SimplePDF_Dev.cer` from this repo (or extract it from the MSIX)
+1. Download `SimpliPDF_Dev.cer` from this repo (or extract it from the MSIX)
 2. Double-click it → **Install Certificate**
 3. Select **Local Machine** → **Place all certificates in the following store** → **Trusted People**
 4. Click Finish
@@ -49,7 +49,7 @@ Then double-click the `.msix` file to install.
 .\build.ps1 -Architectures x64,arm64 -Configuration Release -Msix
 ```
 
-Or open `SimplePDF.slnx` in Visual Studio 2022+ and press F5.
+Or open `SimpliPDF.slnx` in Visual Studio 2022+ and press F5.
 
 ## Tech Stack
 
@@ -65,11 +65,11 @@ Or open `SimplePDF.slnx` in Visual Studio 2022+ and press F5.
 ## Project Structure
 
 ```
-SimplePDF.slnx                 Solution
-SimplePDF_Dev.pfx              Dev signing cert (no password)
-SimplePDF_Dev.cer              Public cert (for trusting)
+SimpliPDF.slnx                 Solution
+SimpliPDF_Dev.pfx              Dev signing cert (no password)
+SimpliPDF_Dev.cer              Public cert (for trusting)
 build.ps1                      Build / publish script
-SimplePDF/
+SimpliPDF/
 ├── Models/PdfPageItem.cs       Page model
 ├── ViewModels/MainViewModel.cs MVVM view model
 ├── Services/

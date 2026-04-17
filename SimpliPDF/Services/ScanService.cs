@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 
-namespace SimplePDF.Services;
+namespace SimpliPDF.Services;
 
 public record ScannerInfo(string DeviceId, string Name);
 
@@ -19,7 +19,7 @@ public static class ScanService
     private const string WiaFormatBmp = "{B96B3CAB-0728-11D3-9D7B-0000F81EF32E}";
 
     private static readonly string ScratchFolder =
-        Path.Combine(Path.GetTempPath(), "SimplePDF_scans");
+        Path.Combine(Path.GetTempPath(), "SimpliPDF_scans");
 
     static ScanService()
     {

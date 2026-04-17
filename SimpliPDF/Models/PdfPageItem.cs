@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Xaml.Media.Imaging;
 
-namespace SimplePDF.Models;
+namespace SimpliPDF.Models;
 
 public partial class PdfPageItem : ObservableObject
 {

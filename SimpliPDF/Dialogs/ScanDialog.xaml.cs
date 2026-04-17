@@ -1,9 +1,9 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
-using SimplePDF.Services;
+using SimpliPDF.Services;
 
-namespace SimplePDF.Dialogs;
+namespace SimpliPDF.Dialogs;
 
 public sealed partial class ScanDialog : ContentDialog
 {
