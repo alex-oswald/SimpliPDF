@@ -47,18 +47,37 @@
                           IsEnabled="False" />
             </Grid>
 
-            <Button x:Name="PreviewButton"
-                    Content="Preview"
-                    Click="OnPreviewClick"
-                    IsEnabled="False"
-                    HorizontalAlignment="Left" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="PreviewButton"
+                        Content="Preview"
+                        Click="OnPreviewClick"
+                        IsEnabled="False" />
+                <HyperlinkButton x:Name="ResetCropButton"
+                                 Content="Reset crop"
+                                 Click="OnResetCropClick"
+                                 Visibility="Collapsed"
+                                 VerticalAlignment="Center" />
+            </StackPanel>
         </StackPanel>
 
-        <!-- Progress bar -->
-        <ProgressBar x:Name="ScanProgress"
-                     Grid.Row="1"
-                     IsIndeterminate="True"
-                     Visibility="Collapsed" />
+        <!-- Progress bar with cancel -->
+        <Grid Grid.Row="1" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <ProgressBar x:Name="ScanProgress"
+                         IsIndeterminate="True"
+                         Visibility="Collapsed"
+                         VerticalAlignment="Center" />
+
+            <Button x:Name="CancelOperationButton"
+                    Grid.Column="1"
+                    Content="Cancel"
+                    Click="OnCancelOperationClick"
+                    Visibility="Collapsed" />
+        </Grid>
 
         <!-- Preview image area -->
         <Border Grid.Row="2"
@@ -81,6 +100,26 @@
                 <Image x:Name="PreviewImage"
                        Stretch="Uniform"
                        Visibility="Collapsed" />
+
+                <!-- Crop overlay canvas -->
+                <Canvas x:Name="CropCanvas"
+                        Background="Transparent"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Visibility="Collapsed"
+                        PointerPressed="OnCropPointerPressed"
+                        PointerMoved="OnCropPointerMoved"
+                        PointerReleased="OnCropPointerReleased">
+                    <Rectangle x:Name="DimTop" Fill="#40000000" />
+                    <Rectangle x:Name="DimBottom" Fill="#40000000" />
+                    <Rectangle x:Name="DimLeft" Fill="#40000000" />
+                    <Rectangle x:Name="DimRight" Fill="#40000000" />
+                    <Rectangle x:Name="CropRect"
+                               Stroke="White"
+                               StrokeThickness="2"
+                               StrokeDashArray="4 4"
+                               Visibility="Collapsed" />
+                </Canvas>
             </Grid>
         </Border>
 

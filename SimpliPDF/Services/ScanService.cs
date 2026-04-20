@@ -11,6 +11,11 @@ public record ScannerCapabilities(List<int> SupportedDpi, List<ScanColorMode> Su
 public enum ScanColorMode { Color = 1, Grayscale = 2, BlackAndWhite = 4 }
 
 /// <summary>
+/// Crop region expressed as fractions (0–1) of the full scan area.
+/// </summary>
+public record ScanCropRegion(double Left, double Top, double Right, double Bottom);
+
+/// <summary>
 /// WIA-based scanning service. All COM calls run on a dedicated STA thread.
 /// Scanned PDFs are stored in a session scratch folder and cleaned up on app exit.
 /// </summary>
@@ -230,8 +235,9 @@ public static class ScanService
 
     /// <summary>
     /// Full-resolution scan, returns path to a temp PDF.
+    /// When a crop region is provided, only the selected area is scanned.
     /// </summary>
-    public static Task<string?> ScanAsync(string deviceId, int dpi, ScanColorMode colorMode)
+    public static Task<string?> ScanAsync(string deviceId, int dpi, ScanColorMode colorMode, ScanCropRegion? crop = null)
     {
         return RunOnStaThread(() =>
         {
@@ -243,6 +249,28 @@ public static class ScanService
             TrySetProperty(scanItem.Properties, 6147, dpi);
             TrySetProperty(scanItem.Properties, 6148, dpi);
             TrySetProperty(scanItem.Properties, 6146, (int)colorMode);
+
+            // Apply crop region via WIA extent properties
+            if (crop != null)
+            {
+                // Read the full scan area at the current DPI
+                int fullWidth = TryGetPropertyValue(scanItem.Properties, 6151);
+                int fullHeight = TryGetPropertyValue(scanItem.Properties, 6152);
+
+                if (fullWidth > 0 && fullHeight > 0)
+                {
+                    int xExtent = (int)((crop.Right - crop.Left) * fullWidth);
+                    int yExtent = (int)((crop.Bottom - crop.Top) * fullHeight);
+                    int xPos = (int)(crop.Left * fullWidth);
+                    int yPos = (int)(crop.Top * fullHeight);
+
+                    // Reduce extent before setting position to stay within bounds
+                    TrySetProperty(scanItem.Properties, 6151, xExtent);
+                    TrySetProperty(scanItem.Properties, 6152, yExtent);
+                    TrySetProperty(scanItem.Properties, 6149, xPos);
+                    TrySetProperty(scanItem.Properties, 6150, yPos);
+                }
+            }
 
             dynamic image;
             try
@@ -305,6 +333,17 @@ public static class ScanService
             prop.set_Value(ref val);
         }
         catch { }
+    }
+
+    private static int TryGetPropertyValue(dynamic properties, int propertyId)
+    {
+        try
+        {
+            object propIdObj = propertyId;
+            dynamic prop = properties.get_Item(ref propIdObj);
+            return Convert.ToInt32(prop.Value);
+        }
+        catch { return 0; }
     }
 
     private static Task<T> RunOnStaThread<T>(Func<T> func)
