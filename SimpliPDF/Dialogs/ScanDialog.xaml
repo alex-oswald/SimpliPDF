@@ -76,6 +76,7 @@
                     Grid.Column="1"
                     Content="Cancel"
                     Click="OnCancelOperationClick"
+                    CornerRadius="4"
                     Visibility="Collapsed" />
         </Grid>
 
@@ -119,6 +120,16 @@
                                StrokeThickness="2"
                                StrokeDashArray="4 4"
                                Visibility="Collapsed" />
+
+                    <!-- Resize handles -->
+                    <Rectangle x:Name="HandleTL" Width="10" Height="10" Fill="White" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleT"  Width="10" Height="10" Fill="White" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleTR" Width="10" Height="10" Fill="White" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleL"  Width="10" Height="10" Fill="White" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleR"  Width="10" Height="10" Fill="White" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleBL" Width="10" Height="10" Fill="White" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleB"  Width="10" Height="10" Fill="White" Visibility="Collapsed" />
+                    <Rectangle x:Name="HandleBR" Width="10" Height="10" Fill="White" Visibility="Collapsed" />
                 </Canvas>
             </Grid>
         </Border>

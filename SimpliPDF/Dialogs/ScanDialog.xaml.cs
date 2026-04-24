@@ -17,10 +17,18 @@ public sealed partial class ScanDialog : ContentDialog
     /// <summary>Path to the scanned PDF, set after a successful scan.</summary>
     public string? ScannedPdfPath { get; private set; }
 
-    private bool _isDragging;
     private Point _dragStart;
     private ScanCropRegion? _cropRegion;
     private CancellationTokenSource? _cancelCts;
+
+    [Flags]
+    private enum DragEdge { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
+    private enum DragMode { None, Resize, Create }
+
+    private DragMode _dragMode;
+    private DragEdge _dragEdges;
+    private const double HandleMargin = 10;
+    private const double MinCropSize = 20;
 
     public ScanDialog()
     {
@@ -136,11 +144,12 @@ public sealed partial class ScanDialog : ContentDialog
             PreviewImage.Visibility = Visibility.Visible;
             PreviewPlaceholder.Visibility = Visibility.Collapsed;
 
-            // Enable crop overlay and reset any previous crop
+            // Enable crop overlay and initialize to full image
             CropCanvas.Visibility = Visibility.Visible;
-            ClearCrop();
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                InitializeCropToFullImage);
 
-            StatusText.Text = "Preview ready – drag to crop, or scan full page";
+            StatusText.Text = "Preview ready – drag edges to crop, or scan full page";
 
             try { File.Delete(imagePath); } catch { }
         }
@@ -232,126 +241,241 @@ public sealed partial class ScanDialog : ContentDialog
     private void OnCancelOperationClick(object sender, RoutedEventArgs e)
     {
         _cancelCts?.Cancel();
-        StatusText.Text = "Cancelling...";
-        CancelOperationButton.IsEnabled = false;
+        SetBusy(false, "Cancelled");
     }
 
     // ── Crop interaction ──────────────────────────────────────────
 
+    private void InitializeCropToFullImage()
+    {
+        var bounds = GetImageBounds();
+        Canvas.SetLeft(CropRect, bounds.X);
+        Canvas.SetTop(CropRect, bounds.Y);
+        CropRect.Width = bounds.Width;
+        CropRect.Height = bounds.Height;
+        CropRect.Visibility = Visibility.Visible;
+
+        _cropRegion = null;
+        ResetCropButton.Visibility = Visibility.Collapsed;
+        UpdateCropVisuals();
+    }
+
+    private DragEdge HitTestEdges(Point pos)
+    {
+        if (CropRect.Visibility == Visibility.Collapsed) return DragEdge.None;
+
+        double cx = Canvas.GetLeft(CropRect);
+        double cy = Canvas.GetTop(CropRect);
+        double cr = cx + CropRect.Width;
+        double cb = cy + CropRect.Height;
+
+        // Must be within extended rect area
+        if (pos.X < cx - HandleMargin || pos.X > cr + HandleMargin ||
+            pos.Y < cy - HandleMargin || pos.Y > cb + HandleMargin)
+            return DragEdge.None;
+
+        var edges = DragEdge.None;
+        if (Math.Abs(pos.X - cx) <= HandleMargin) edges |= DragEdge.Left;
+        else if (Math.Abs(pos.X - cr) <= HandleMargin) edges |= DragEdge.Right;
+
+        if (Math.Abs(pos.Y - cy) <= HandleMargin) edges |= DragEdge.Top;
+        else if (Math.Abs(pos.Y - cb) <= HandleMargin) edges |= DragEdge.Bottom;
+
+        return edges;
+    }
+
     private void OnCropPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        var pos = e.GetCurrentPoint(CropCanvas).Position;
         CropCanvas.CapturePointer(e.Pointer);
-        _dragStart = e.GetCurrentPoint(CropCanvas).Position;
-        _isDragging = true;
 
-        CropRect.Visibility = Visibility.Visible;
-        Canvas.SetLeft(CropRect, _dragStart.X);
-        Canvas.SetTop(CropRect, _dragStart.Y);
-        CropRect.Width = 0;
-        CropRect.Height = 0;
+        _dragEdges = HitTestEdges(pos);
+        if (_dragEdges != DragEdge.None)
+        {
+            _dragMode = DragMode.Resize;
+        }
+        else
+        {
+            _dragMode = DragMode.Create;
+            _dragStart = pos;
+            Canvas.SetLeft(CropRect, pos.X);
+            Canvas.SetTop(CropRect, pos.Y);
+            CropRect.Width = 0;
+            CropRect.Height = 0;
+            CropRect.Visibility = Visibility.Visible;
+        }
     }
 
     private void OnCropPointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (!_isDragging) return;
+        if (_dragMode == DragMode.None) return;
 
         var pos = e.GetCurrentPoint(CropCanvas).Position;
-        var canvasW = CropCanvas.ActualWidth;
-        var canvasH = CropCanvas.ActualHeight;
+        double canvasW = CropCanvas.ActualWidth;
+        double canvasH = CropCanvas.ActualHeight;
+        pos = new Point(Math.Clamp(pos.X, 0, canvasW), Math.Clamp(pos.Y, 0, canvasH));
 
-        double x = Math.Clamp(Math.Min(_dragStart.X, pos.X), 0, canvasW);
-        double y = Math.Clamp(Math.Min(_dragStart.Y, pos.Y), 0, canvasH);
-        double w = Math.Clamp(Math.Abs(pos.X - _dragStart.X), 0, canvasW - x);
-        double h = Math.Clamp(Math.Abs(pos.Y - _dragStart.Y), 0, canvasH - y);
+        if (_dragMode == DragMode.Create)
+        {
+            double x = Math.Min(_dragStart.X, pos.X);
+            double y = Math.Min(_dragStart.Y, pos.Y);
+            double w = Math.Abs(pos.X - _dragStart.X);
+            double h = Math.Abs(pos.Y - _dragStart.Y);
 
-        Canvas.SetLeft(CropRect, x);
-        Canvas.SetTop(CropRect, y);
-        CropRect.Width = w;
-        CropRect.Height = h;
+            Canvas.SetLeft(CropRect, x);
+            Canvas.SetTop(CropRect, y);
+            CropRect.Width = w;
+            CropRect.Height = h;
+        }
+        else
+        {
+            double left = Canvas.GetLeft(CropRect);
+            double top = Canvas.GetTop(CropRect);
+            double right = left + CropRect.Width;
+            double bottom = top + CropRect.Height;
 
-        UpdateDimOverlays(x, y, w, h, canvasW, canvasH);
+            if (_dragEdges.HasFlag(DragEdge.Left)) left = Math.Min(pos.X, right - MinCropSize);
+            if (_dragEdges.HasFlag(DragEdge.Right)) right = Math.Max(pos.X, left + MinCropSize);
+            if (_dragEdges.HasFlag(DragEdge.Top)) top = Math.Min(pos.Y, bottom - MinCropSize);
+            if (_dragEdges.HasFlag(DragEdge.Bottom)) bottom = Math.Max(pos.Y, top + MinCropSize);
+
+            Canvas.SetLeft(CropRect, Math.Max(0, left));
+            Canvas.SetTop(CropRect, Math.Max(0, top));
+            CropRect.Width = Math.Min(right - Math.Max(0, left), canvasW - Math.Max(0, left));
+            CropRect.Height = Math.Min(bottom - Math.Max(0, top), canvasH - Math.Max(0, top));
+        }
+
+        UpdateCropVisuals();
     }
 
     private void OnCropPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         CropCanvas.ReleasePointerCapture(e.Pointer);
-        _isDragging = false;
+        if (_dragMode == DragMode.None) return;
+        _dragMode = DragMode.None;
 
-        if (CropRect.Width < 5 || CropRect.Height < 5)
+        if (CropRect.Width < MinCropSize || CropRect.Height < MinCropSize)
         {
-            ClearCrop();
+            InitializeCropToFullImage();
             return;
         }
 
-        // Convert canvas-relative crop rectangle to 0–1 fractions of the image
+        ComputeCropRegion();
+    }
+
+    private void ComputeCropRegion()
+    {
         var imageBounds = GetImageBounds();
-        if (imageBounds.Width <= 0 || imageBounds.Height <= 0)
-        {
-            ClearCrop();
-            return;
-        }
+        if (imageBounds.Width <= 0 || imageBounds.Height <= 0) return;
 
         double left = Math.Clamp((Canvas.GetLeft(CropRect) - imageBounds.X) / imageBounds.Width, 0, 1);
         double top = Math.Clamp((Canvas.GetTop(CropRect) - imageBounds.Y) / imageBounds.Height, 0, 1);
         double right = Math.Clamp(left + CropRect.Width / imageBounds.Width, 0, 1);
         double bottom = Math.Clamp(top + CropRect.Height / imageBounds.Height, 0, 1);
 
-        if (right - left < 0.01 || bottom - top < 0.01)
+        // If essentially full image, treat as no crop
+        if (left < 0.02 && top < 0.02 && right > 0.98 && bottom > 0.98)
         {
-            ClearCrop();
-            return;
+            _cropRegion = null;
+            ResetCropButton.Visibility = Visibility.Collapsed;
+            StatusText.Text = "Preview ready – drag edges to crop, or scan full page";
         }
-
-        _cropRegion = new ScanCropRegion(left, top, right, bottom);
-        ResetCropButton.Visibility = Visibility.Visible;
-        StatusText.Text = "Crop selected – scan will capture the highlighted area";
+        else
+        {
+            _cropRegion = new ScanCropRegion(left, top, right, bottom);
+            ResetCropButton.Visibility = Visibility.Visible;
+            StatusText.Text = "Crop selected – scan will capture the highlighted area";
+        }
     }
 
     private void OnResetCropClick(object sender, RoutedEventArgs e)
     {
-        ClearCrop();
-        StatusText.Text = "Crop cleared – scan will capture full page";
+        InitializeCropToFullImage();
+        StatusText.Text = "Crop reset – scan will capture full page";
     }
 
     private void ClearCrop()
     {
         _cropRegion = null;
-        _isDragging = false;
+        _dragMode = DragMode.None;
         CropRect.Visibility = Visibility.Collapsed;
         ResetCropButton.Visibility = Visibility.Collapsed;
+        SetHandlesVisibility(Visibility.Collapsed);
 
-        // Hide dim overlays
         DimTop.Width = DimTop.Height = 0;
         DimBottom.Width = DimBottom.Height = 0;
         DimLeft.Width = DimLeft.Height = 0;
         DimRight.Width = DimRight.Height = 0;
     }
 
+    private void UpdateCropVisuals()
+    {
+        double x = Canvas.GetLeft(CropRect);
+        double y = Canvas.GetTop(CropRect);
+        double w = CropRect.Width;
+        double h = CropRect.Height;
+        double canvasW = CropCanvas.ActualWidth;
+        double canvasH = CropCanvas.ActualHeight;
+
+        UpdateDimOverlays(x, y, w, h, canvasW, canvasH);
+        UpdateHandlePositions(x, y, w, h);
+        SetHandlesVisibility(Visibility.Visible);
+    }
+
     private void UpdateDimOverlays(double x, double y, double w, double h, double canvasW, double canvasH)
     {
-        // Top strip (full width, above crop)
         Canvas.SetLeft(DimTop, 0);
         Canvas.SetTop(DimTop, 0);
         DimTop.Width = canvasW;
         DimTop.Height = y;
 
-        // Bottom strip (full width, below crop)
         Canvas.SetLeft(DimBottom, 0);
         Canvas.SetTop(DimBottom, y + h);
         DimBottom.Width = canvasW;
         DimBottom.Height = Math.Max(0, canvasH - y - h);
 
-        // Left strip (between top and bottom, left of crop)
         Canvas.SetLeft(DimLeft, 0);
         Canvas.SetTop(DimLeft, y);
         DimLeft.Width = x;
         DimLeft.Height = h;
 
-        // Right strip (between top and bottom, right of crop)
         Canvas.SetLeft(DimRight, x + w);
         Canvas.SetTop(DimRight, y);
         DimRight.Width = Math.Max(0, canvasW - x - w);
         DimRight.Height = h;
+    }
+
+    private void UpdateHandlePositions(double x, double y, double w, double h)
+    {
+        const double hs = 10;
+        const double hh = hs / 2;
+
+        PositionHandle(HandleTL, x - hh, y - hh);
+        PositionHandle(HandleT, x + w / 2 - hh, y - hh);
+        PositionHandle(HandleTR, x + w - hh, y - hh);
+        PositionHandle(HandleL, x - hh, y + h / 2 - hh);
+        PositionHandle(HandleR, x + w - hh, y + h / 2 - hh);
+        PositionHandle(HandleBL, x - hh, y + h - hh);
+        PositionHandle(HandleB, x + w / 2 - hh, y + h - hh);
+        PositionHandle(HandleBR, x + w - hh, y + h - hh);
+    }
+
+    private static void PositionHandle(FrameworkElement handle, double x, double y)
+    {
+        Canvas.SetLeft(handle, x);
+        Canvas.SetTop(handle, y);
+    }
+
+    private void SetHandlesVisibility(Visibility v)
+    {
+        HandleTL.Visibility = v;
+        HandleT.Visibility = v;
+        HandleTR.Visibility = v;
+        HandleL.Visibility = v;
+        HandleR.Visibility = v;
+        HandleBL.Visibility = v;
+        HandleB.Visibility = v;
+        HandleBR.Visibility = v;
     }
 
     /// <summary>

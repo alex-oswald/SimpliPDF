@@ -257,19 +257,28 @@ public static class ScanService
                 int fullWidth = TryGetPropertyValue(scanItem.Properties, 6151);
                 int fullHeight = TryGetPropertyValue(scanItem.Properties, 6152);
 
-                if (fullWidth > 0 && fullHeight > 0)
-                {
-                    int xExtent = (int)((crop.Right - crop.Left) * fullWidth);
-                    int yExtent = (int)((crop.Bottom - crop.Top) * fullHeight);
-                    int xPos = (int)(crop.Left * fullWidth);
-                    int yPos = (int)(crop.Top * fullHeight);
+                // Fallback: estimate from standard letter size at selected DPI
+                if (fullWidth <= 0) fullWidth = (int)(8.5 * dpi);
+                if (fullHeight <= 0) fullHeight = (int)(11.0 * dpi);
 
-                    // Reduce extent before setting position to stay within bounds
-                    TrySetProperty(scanItem.Properties, 6151, xExtent);
-                    TrySetProperty(scanItem.Properties, 6152, yExtent);
-                    TrySetProperty(scanItem.Properties, 6149, xPos);
-                    TrySetProperty(scanItem.Properties, 6150, yPos);
-                }
+                int xPos = (int)(crop.Left * fullWidth);
+                int yPos = (int)(crop.Top * fullHeight);
+                int xExtent = Math.Max(1, (int)((crop.Right - crop.Left) * fullWidth));
+                int yExtent = Math.Max(1, (int)((crop.Bottom - crop.Top) * fullHeight));
+
+                // Clamp so position + extent doesn't exceed full size
+                if (xPos + xExtent > fullWidth) xExtent = fullWidth - xPos;
+                if (yPos + yExtent > fullHeight) yExtent = fullHeight - yPos;
+
+                // Reset position to origin first so shrinking extent can't fail
+                TrySetProperty(scanItem.Properties, 6149, 0);
+                TrySetProperty(scanItem.Properties, 6150, 0);
+                // Set desired extent
+                TrySetProperty(scanItem.Properties, 6151, xExtent);
+                TrySetProperty(scanItem.Properties, 6152, yExtent);
+                // Set desired position
+                TrySetProperty(scanItem.Properties, 6149, xPos);
+                TrySetProperty(scanItem.Properties, 6150, yPos);
             }
 
             dynamic image;
