@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
+using Windows.Win32.UI.Shell;
 
 namespace SimpliPDF.Helpers;
 
@@ -11,13 +12,13 @@ public static class Win32FileDialog
 {
     public static string[]? OpenPdfFiles(IntPtr hwnd)
     {
-        var dialog = CreateDialog<Windows.Win32.UI.Shell.IFileOpenDialog>(
+        IFileOpenDialog? dialog = CreateDialog<Windows.Win32.UI.Shell.IFileOpenDialog>(
             "DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7");
         if (dialog == null) return null;
 
         try
         {
-            dialog.GetOptions(out var options);
+            dialog.GetOptions(out FILEOPENDIALOGOPTIONS options);
             dialog.SetOptions(options
                 | Windows.Win32.UI.Shell.FILEOPENDIALOGOPTIONS.FOS_ALLOWMULTISELECT
                 | Windows.Win32.UI.Shell.FILEOPENDIALOGOPTIONS.FOS_FILEMUSTEXIST);
@@ -27,13 +28,13 @@ public static class Win32FileDialog
             try { dialog.Show(new HWND(hwnd)); }
             catch { return null; }
 
-            dialog.GetResults(out var items);
-            items.GetCount(out var count);
-            var paths = new List<string>();
+            dialog.GetResults(out IShellItemArray? items);
+            items.GetCount(out uint count);
+            List<string> paths = new List<string>();
             for (uint i = 0; i < count; i++)
             {
-                items.GetItemAt(i, out var item);
-                item.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_FILESYSPATH, out var path);
+                items.GetItemAt(i, out IShellItem? item);
+                item.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_FILESYSPATH, out PWSTR path);
                 paths.Add(path.ToString());
             }
             return paths.Count > 0 ? paths.ToArray() : null;
@@ -43,7 +44,7 @@ public static class Win32FileDialog
 
     public static string? SavePdfFile(IntPtr hwnd, string defaultName = "Merged.pdf")
     {
-        var dialog = CreateDialog<Windows.Win32.UI.Shell.IFileSaveDialog>(
+        IFileSaveDialog? dialog = CreateDialog<Windows.Win32.UI.Shell.IFileSaveDialog>(
             "C0B4E2F3-BA21-4773-8DBA-335EC946EB8B");
         if (dialog == null) return null;
 
@@ -56,8 +57,8 @@ public static class Win32FileDialog
             try { dialog.Show(new HWND(hwnd)); }
             catch { return null; }
 
-            dialog.GetResult(out var item);
-            item.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_FILESYSPATH, out var path);
+            dialog.GetResult(out IShellItem? item);
+            item.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_FILESYSPATH, out PWSTR path);
             return path.ToString();
         }
         catch { return null; }
@@ -65,21 +66,21 @@ public static class Win32FileDialog
 
     public static string? PickFolder(IntPtr hwnd)
     {
-        var dialog = CreateDialog<Windows.Win32.UI.Shell.IFileOpenDialog>(
+        IFileOpenDialog? dialog = CreateDialog<Windows.Win32.UI.Shell.IFileOpenDialog>(
             "DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7");
         if (dialog == null) return null;
 
         try
         {
-            dialog.GetOptions(out var options);
+            dialog.GetOptions(out FILEOPENDIALOGOPTIONS options);
             dialog.SetOptions(options | Windows.Win32.UI.Shell.FILEOPENDIALOGOPTIONS.FOS_PICKFOLDERS);
             dialog.SetTitle("Select output folder");
 
             try { dialog.Show(new HWND(hwnd)); }
             catch { return null; }
 
-            dialog.GetResult(out var item);
-            item.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_FILESYSPATH, out var path);
+            dialog.GetResult(out IShellItem? item);
+            item.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_FILESYSPATH, out PWSTR path);
             return path.ToString();
         }
         catch { return null; }
@@ -87,9 +88,9 @@ public static class Win32FileDialog
 
     private static T? CreateDialog<T>(string clsidStr) where T : class
     {
-        var clsid = new Guid(clsidStr);
-        var iid = typeof(T).GUID;
-        PInvoke.CoCreateInstance(in clsid, null, Windows.Win32.System.Com.CLSCTX.CLSCTX_INPROC_SERVER, in iid, out var ppv);
+        Guid clsid = new Guid(clsidStr);
+        Guid iid = typeof(T).GUID;
+        PInvoke.CoCreateInstance(in clsid, null, Windows.Win32.System.Com.CLSCTX.CLSCTX_INPROC_SERVER, in iid, out object? ppv);
         return ppv as T;
     }
 
@@ -107,14 +108,14 @@ public static class Win32FileDialog
         try
         {
             // Use dynamic to call SetFileTypes(uint, ptr) with marshaled struct
-            var pdfName = Marshal.StringToCoTaskMemUni("PDF Files");
-            var pdfSpec = Marshal.StringToCoTaskMemUni("*.pdf");
-            var allName = Marshal.StringToCoTaskMemUni("All Files");
-            var allSpec = Marshal.StringToCoTaskMemUni("*.*");
+            nint pdfName = Marshal.StringToCoTaskMemUni("PDF Files");
+            nint pdfSpec = Marshal.StringToCoTaskMemUni("*.pdf");
+            nint allName = Marshal.StringToCoTaskMemUni("All Files");
+            nint allSpec = Marshal.StringToCoTaskMemUni("*.*");
 
             // COMDLG_FILTERSPEC is { LPCWSTR pszName; LPCWSTR pszSpec; } = two IntPtrs
             int structSize = IntPtr.Size * 2;
-            var filterMem = Marshal.AllocCoTaskMem(structSize * 2);
+            nint filterMem = Marshal.AllocCoTaskMem(structSize * 2);
 
             Marshal.WriteIntPtr(filterMem, 0, pdfName);
             Marshal.WriteIntPtr(filterMem, IntPtr.Size, pdfSpec);
@@ -122,17 +123,17 @@ public static class Win32FileDialog
             Marshal.WriteIntPtr(filterMem, structSize + IntPtr.Size, allSpec);
 
             // Get the COM interface pointer and call SetFileTypes via vtable
-            var punk = Marshal.GetIUnknownForObject(dialog);
-            var iidFileDialog = new Guid("42F85136-DB7E-439C-85F1-E4075D135FC8"); // IID_IFileDialog
-            Marshal.QueryInterface(punk, in iidFileDialog, out var pFileDialog);
+            nint punk = Marshal.GetIUnknownForObject(dialog);
+            Guid iidFileDialog = new Guid("42F85136-DB7E-439C-85F1-E4075D135FC8"); // IID_IFileDialog
+            Marshal.QueryInterface(punk, in iidFileDialog, out nint pFileDialog);
             Marshal.Release(punk);
 
             // IFileDialog vtable: IUnknown(3) + Show(1) + SetFileTypes is index 4
-            var vtable = Marshal.ReadIntPtr(pFileDialog);
-            var setFileTypesPtr = Marshal.ReadIntPtr(vtable, IntPtr.Size * 4);
+            nint vtable = Marshal.ReadIntPtr(pFileDialog);
+            nint setFileTypesPtr = Marshal.ReadIntPtr(vtable, IntPtr.Size * 4);
 
             // delegate: HRESULT SetFileTypes(IFileDialog*, uint cFileTypes, COMDLG_FILTERSPEC* rgFilterSpec)
-            var setFileTypes = Marshal.GetDelegateForFunctionPointer<SetFileTypesDelegate>(setFileTypesPtr);
+            SetFileTypesDelegate setFileTypes = Marshal.GetDelegateForFunctionPointer<SetFileTypesDelegate>(setFileTypesPtr);
             setFileTypes(pFileDialog, 2, filterMem);
 
             Marshal.Release(pFileDialog);

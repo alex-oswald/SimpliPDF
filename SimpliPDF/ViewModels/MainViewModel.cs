@@ -46,11 +46,11 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var fileName = Path.GetFileName(filePath);
+        string fileName = Path.GetFileName(filePath);
 
         for (int i = 0; i < pageCount; i++)
         {
-            var item = new PdfPageItem
+            PdfPageItem item = new PdfPageItem
             {
                 SourceFilePath = filePath,
                 OriginalPageIndex = i,
@@ -86,14 +86,14 @@ public partial class MainViewModel : ObservableObject
 
     public void DeletePages(IList<object> selectedItems)
     {
-        var pages = selectedItems.OfType<PdfPageItem>().ToList();
-        foreach (var p in pages)
+        List<PdfPageItem> pages = selectedItems.OfType<PdfPageItem>().ToList();
+        foreach (PdfPageItem? p in pages)
             Pages.Remove(p);
     }
 
     public void RotatePages(IList<object> selectedItems)
     {
-        foreach (var p in selectedItems.OfType<PdfPageItem>())
+        foreach (PdfPageItem p in selectedItems.OfType<PdfPageItem>())
             p.Rotation = (p.Rotation + 90) % 360;
     }
 
@@ -102,7 +102,7 @@ public partial class MainViewModel : ObservableObject
         if (Pages.Count == 0) return;
         try
         {
-            var count = Pages.Count;
+            int count = Pages.Count;
             await Task.Run(() => _pdfService.Split(Pages.ToList(), outputFolder));
             StatusText = $"Split {count} pages to {Path.GetFileName(outputFolder)}";
         }
@@ -114,7 +114,7 @@ public partial class MainViewModel : ObservableObject
 
     public async Task ExtractToAsync(IList<object> selectedItems, string outputPath)
     {
-        var pages = selectedItems.OfType<PdfPageItem>().ToList();
+        List<PdfPageItem> pages = selectedItems.OfType<PdfPageItem>().ToList();
         if (pages.Count == 0) return;
         try
         {

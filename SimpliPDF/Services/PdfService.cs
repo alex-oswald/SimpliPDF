@@ -8,26 +8,26 @@ public class PdfService
 {
     public int GetPageCount(string filePath)
     {
-        using var doc = PdfReader.Open(filePath, PdfDocumentOpenMode.Import);
+        using PdfDocument doc = PdfReader.Open(filePath, PdfDocumentOpenMode.Import);
         return doc.PageCount;
     }
 
     public void MergeAndSave(IList<PdfPageItem> pages, string outputPath)
     {
-        using var output = new PdfDocument();
-        var sourceCache = new Dictionary<string, PdfDocument>();
+        using PdfDocument output = new PdfDocument();
+        Dictionary<string, PdfDocument> sourceCache = new Dictionary<string, PdfDocument>();
 
         try
         {
-            foreach (var page in pages)
+            foreach (PdfPageItem page in pages)
             {
-                if (!sourceCache.TryGetValue(page.SourceFilePath, out var sourceDoc))
+                if (!sourceCache.TryGetValue(page.SourceFilePath, out PdfDocument? sourceDoc))
                 {
                     sourceDoc = PdfReader.Open(page.SourceFilePath, PdfDocumentOpenMode.Import);
                     sourceCache[page.SourceFilePath] = sourceDoc;
                 }
 
-                var importedPage = output.AddPage(sourceDoc.Pages[page.OriginalPageIndex]);
+                PdfPage importedPage = output.AddPage(sourceDoc.Pages[page.OriginalPageIndex]);
                 if (page.Rotation != 0)
                     importedPage.Rotate = (importedPage.Rotate + page.Rotation) % 360;
             }
@@ -36,7 +36,7 @@ public class PdfService
         }
         finally
         {
-            foreach (var doc in sourceCache.Values)
+            foreach (PdfDocument doc in sourceCache.Values)
                 doc.Dispose();
         }
     }
@@ -45,11 +45,11 @@ public class PdfService
     {
         for (int i = 0; i < pages.Count; i++)
         {
-            using var output = new PdfDocument();
-            var page = pages[i];
+            using PdfDocument output = new PdfDocument();
+            PdfPageItem page = pages[i];
 
-            using var sourceDoc = PdfReader.Open(page.SourceFilePath, PdfDocumentOpenMode.Import);
-            var importedPage = output.AddPage(sourceDoc.Pages[page.OriginalPageIndex]);
+            using PdfDocument sourceDoc = PdfReader.Open(page.SourceFilePath, PdfDocumentOpenMode.Import);
+            PdfPage importedPage = output.AddPage(sourceDoc.Pages[page.OriginalPageIndex]);
             if (page.Rotation != 0)
                 importedPage.Rotate = (importedPage.Rotate + page.Rotation) % 360;
 

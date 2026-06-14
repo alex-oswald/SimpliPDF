@@ -50,7 +50,7 @@ public class PrintHelper
 
     private void OnPrintTaskRequested(PrintManager sender, PrintTaskRequestedEventArgs args)
     {
-        var printTask = args.Request.CreatePrintTask("SimpliPDF Document", sourceArgs =>
+        PrintTask printTask = args.Request.CreatePrintTask("SimpliPDF Document", sourceArgs =>
         {
             sourceArgs.SetSource(_printDocumentSource);
         });
@@ -62,9 +62,9 @@ public class PrintHelper
 
         if (_pagesToPrint == null) return;
 
-        foreach (var page in _pagesToPrint)
+        foreach (PdfPageItem page in _pagesToPrint)
         {
-            var image = new Image
+            Image image = new Image
             {
                 Source = page.Thumbnail,
                 Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
@@ -95,7 +95,7 @@ public class PrintHelper
 
     private void OnAddPages(object sender, AddPagesEventArgs e)
     {
-        foreach (var page in _renderedPages)
+        foreach (UIElement page in _renderedPages)
             _printDocument?.AddPage(page);
 
         _printDocument?.AddPagesComplete();

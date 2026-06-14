@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using SimpliPDF.Dialogs;
 using SimpliPDF.Helpers;
+using SimpliPDF.Services;
 using SimpliPDF.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -47,7 +49,7 @@ public sealed partial class MainWindow : Window
         ViewModel.StatusText = "Discovering scanners...";
         try
         {
-            var scanners = await SimpliPDF.Services.ScanService.GetScannersAsync();
+            List<ScannerInfo> scanners = await SimpliPDF.Services.ScanService.GetScannersAsync();
             ScanBtn.IsEnabled = true;
             ViewModel.StatusText = scanners.Count > 0
                 ? $"Found {scanners.Count} scanner{(scanners.Count != 1 ? "s" : "")}"
@@ -66,10 +68,10 @@ public sealed partial class MainWindow : Window
 
         if (uMsg == WM_GETMINMAXINFO)
         {
-            var dpi = PInvoke.GetDpiForWindow(hWnd);
-            var scale = dpi / 96.0;
+            uint dpi = PInvoke.GetDpiForWindow(hWnd);
+            double scale = dpi / 96.0;
 
-            var minMax = System.Runtime.InteropServices.Marshal.PtrToStructure<MINMAXINFO>(lParam);
+            MINMAXINFO minMax = System.Runtime.InteropServices.Marshal.PtrToStructure<MINMAXINFO>(lParam);
             minMax.ptMinTrackSize.X = (int)(MinWidthDip * scale);
             minMax.ptMinTrackSize.Y = (int)(MinHeightDip * scale);
             System.Runtime.InteropServices.Marshal.StructureToPtr(minMax, lParam, false);
@@ -108,13 +110,13 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var files = Win32FileDialog.OpenPdfFiles(Hwnd);
+            string[]? files = Win32FileDialog.OpenPdfFiles(Hwnd);
             if (files == null || files.Length == 0) return;
 
             ViewModel.IsLoading = true;
             try
             {
-                foreach (var path in files)
+                foreach (string path in files)
                     await ViewModel.LoadPdfAsync(path);
             }
             finally
@@ -132,12 +134,12 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var dialog = new SimpliPDF.Dialogs.ScanDialog { XamlRoot = Content.XamlRoot };
-            var result = await dialog.ShowAsync();
+            ScanDialog dialog = new SimpliPDF.Dialogs.ScanDialog { XamlRoot = Content.XamlRoot };
+            ContentDialogResult result = await dialog.ShowAsync();
 
             if (dialog.NoScannersFound)
             {
-                var errorDialog = new ContentDialog
+                ContentDialog errorDialog = new ContentDialog
                 {
                     XamlRoot = Content.XamlRoot,
                     Title = "No scanners found",
@@ -173,7 +175,7 @@ public sealed partial class MainWindow : Window
         if (ViewModel.Pages.Count == 0) return;
         try
         {
-            var path = Win32FileDialog.SavePdfFile(Hwnd);
+            string? path = Win32FileDialog.SavePdfFile(Hwnd);
             if (path == null) return;
             await ViewModel.SaveToAsync(path);
         }
@@ -185,7 +187,7 @@ public sealed partial class MainWindow : Window
         if (ViewModel.Pages.Count == 0) return;
         try
         {
-            var helper = new PrintHelper(Hwnd);
+            PrintHelper helper = new PrintHelper(Hwnd);
             await helper.PrintAsync(ViewModel.Pages.ToList());
         }
         catch (Exception ex)
@@ -216,7 +218,7 @@ public sealed partial class MainWindow : Window
         if (ViewModel.Pages.Count == 0) return;
         try
         {
-            var folder = Win32FileDialog.PickFolder(Hwnd);
+            string? folder = Win32FileDialog.PickFolder(Hwnd);
             if (folder == null) return;
             await ViewModel.SplitToAsync(folder);
         }
@@ -232,7 +234,7 @@ public sealed partial class MainWindow : Window
         }
         try
         {
-            var path = Win32FileDialog.SavePdfFile(Hwnd, "Extracted.pdf");
+            string? path = Win32FileDialog.SavePdfFile(Hwnd, "Extracted.pdf");
             if (path == null) return;
             await ViewModel.ExtractToAsync(PagesGridView.SelectedItems, path);
         }
@@ -259,11 +261,11 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var items = await e.DataView.GetStorageItemsAsync();
+            IReadOnlyList<IStorageItem> items = await e.DataView.GetStorageItemsAsync();
             ViewModel.IsLoading = true;
             try
             {
-                foreach (var item in items)
+                foreach (IStorageItem? item in items)
                 {
                     if (item is StorageFile file &&
                         file.FileType.Equals(".pdf", StringComparison.OrdinalIgnoreCase))

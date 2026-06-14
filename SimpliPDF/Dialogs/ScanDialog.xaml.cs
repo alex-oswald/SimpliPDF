@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using SimpliPDF.Services;
 using Windows.Foundation;
+using Windows.Storage.Streams;
 
 namespace SimpliPDF.Dialogs;
 
@@ -38,7 +39,7 @@ public sealed partial class ScanDialog : ContentDialog
 
     private async Task LoadScannersAsync()
     {
-        var scanners = await ScanService.GetScannersAsync();
+        List<ScannerInfo> scanners = await ScanService.GetScannersAsync();
 
         if (scanners.Count == 0)
         {
@@ -68,14 +69,14 @@ public sealed partial class ScanDialog : ContentDialog
 
         try
         {
-            var caps = await ScanService.GetCapabilitiesAsync(SelectedScanner.DeviceId);
+            ScannerCapabilities caps = await ScanService.GetCapabilitiesAsync(SelectedScanner.DeviceId);
 
             // Populate DPI dropdown
             DpiCombo.Items.Clear();
             int defaultDpiIndex = 0;
             for (int i = 0; i < caps.SupportedDpi.Count; i++)
             {
-                var dpi = caps.SupportedDpi[i];
+                int dpi = caps.SupportedDpi[i];
                 DpiCombo.Items.Add(new ComboBoxItem { Content = $"{dpi} DPI", Tag = dpi.ToString() });
                 if (dpi == 300) defaultDpiIndex = i;
             }
@@ -84,9 +85,9 @@ public sealed partial class ScanDialog : ContentDialog
 
             // Populate color mode dropdown
             ColorModeCombo.Items.Clear();
-            foreach (var mode in caps.SupportedColorModes)
+            foreach (ScanColorMode mode in caps.SupportedColorModes)
             {
-                var label = mode switch
+                string label = mode switch
                 {
                     ScanColorMode.Color => "Color",
                     ScanColorMode.Grayscale => "Grayscale",
@@ -116,11 +117,11 @@ public sealed partial class ScanDialog : ContentDialog
         if (SelectedScanner == null) return;
 
         _cancelCts = new CancellationTokenSource();
-        var token = _cancelCts.Token;
+        CancellationToken token = _cancelCts.Token;
         SetBusy(true, "Previewing...");
         try
         {
-            var imagePath = await ScanService.PreviewAsync(SelectedScanner.DeviceId);
+            string? imagePath = await ScanService.PreviewAsync(SelectedScanner.DeviceId);
 
             if (token.IsCancellationRequested)
             {
@@ -135,9 +136,9 @@ public sealed partial class ScanDialog : ContentDialog
                 return;
             }
 
-            var bitmap = new BitmapImage();
-            using var stream = File.OpenRead(imagePath);
-            using var winrtStream = stream.AsRandomAccessStream();
+            BitmapImage bitmap = new BitmapImage();
+            using FileStream stream = File.OpenRead(imagePath);
+            using IRandomAccessStream winrtStream = stream.AsRandomAccessStream();
             await bitmap.SetSourceAsync(winrtStream);
 
             PreviewImage.Source = bitmap;
@@ -167,7 +168,7 @@ public sealed partial class ScanDialog : ContentDialog
     private async void OnPrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
         // Defer closing so we can scan while the dialog stays open
-        var deferral = args.GetDeferral();
+        ContentDialogButtonClickDeferral deferral = args.GetDeferral();
 
         try
         {
@@ -183,10 +184,10 @@ public sealed partial class ScanDialog : ContentDialog
             }
 
             _cancelCts = new CancellationTokenSource();
-            var token = _cancelCts.Token;
+            CancellationToken token = _cancelCts.Token;
             SetBusy(true, "Scanning...");
 
-            var pdfPath = await ScanService.ScanAsync(
+            string? pdfPath = await ScanService.ScanAsync(
                 SelectedScanner.DeviceId, SelectedDpi, SelectedColorMode, _cropRegion);
 
             if (token.IsCancellationRequested)
@@ -248,7 +249,7 @@ public sealed partial class ScanDialog : ContentDialog
 
     private void InitializeCropToFullImage()
     {
-        var bounds = GetImageBounds();
+        Rect bounds = GetImageBounds();
         Canvas.SetLeft(CropRect, bounds.X);
         Canvas.SetTop(CropRect, bounds.Y);
         CropRect.Width = bounds.Width;
@@ -274,7 +275,7 @@ public sealed partial class ScanDialog : ContentDialog
             pos.Y < cy - HandleMargin || pos.Y > cb + HandleMargin)
             return DragEdge.None;
 
-        var edges = DragEdge.None;
+        DragEdge edges = DragEdge.None;
         if (Math.Abs(pos.X - cx) <= HandleMargin) edges |= DragEdge.Left;
         else if (Math.Abs(pos.X - cr) <= HandleMargin) edges |= DragEdge.Right;
 
@@ -286,7 +287,7 @@ public sealed partial class ScanDialog : ContentDialog
 
     private void OnCropPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        var pos = e.GetCurrentPoint(CropCanvas).Position;
+        Point pos = e.GetCurrentPoint(CropCanvas).Position;
         CropCanvas.CapturePointer(e.Pointer);
 
         _dragEdges = HitTestEdges(pos);
@@ -310,7 +311,7 @@ public sealed partial class ScanDialog : ContentDialog
     {
         if (_dragMode == DragMode.None) return;
 
-        var pos = e.GetCurrentPoint(CropCanvas).Position;
+        Point pos = e.GetCurrentPoint(CropCanvas).Position;
         double canvasW = CropCanvas.ActualWidth;
         double canvasH = CropCanvas.ActualHeight;
         pos = new Point(Math.Clamp(pos.X, 0, canvasW), Math.Clamp(pos.Y, 0, canvasH));
@@ -365,7 +366,7 @@ public sealed partial class ScanDialog : ContentDialog
 
     private void ComputeCropRegion()
     {
-        var imageBounds = GetImageBounds();
+        Rect imageBounds = GetImageBounds();
         if (imageBounds.Width <= 0 || imageBounds.Height <= 0) return;
 
         double left = Math.Clamp((Canvas.GetLeft(CropRect) - imageBounds.X) / imageBounds.Width, 0, 1);

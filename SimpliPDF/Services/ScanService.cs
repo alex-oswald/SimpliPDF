@@ -61,16 +61,16 @@ public static class ScanService
 
     private static async Task<List<ScannerInfo>> FetchScannersAndCacheCapabilities()
     {
-        var scanners = await RunOnStaThread(() =>
+        List<ScannerInfo> scanners = await RunOnStaThread(() =>
         {
-            var result = new List<ScannerInfo>();
-            var dm = DispatchObject.CoCreate("WIA.DeviceManager");
+            List<ScannerInfo> result = new List<ScannerInfo>();
+            DispatchObject? dm = DispatchObject.CoCreate("WIA.DeviceManager");
             if (dm == null) return result;
 
-            var infos = dm.GetObject("DeviceInfos");
+            DispatchObject? infos = dm.GetObject("DeviceInfos");
             if (infos == null) return result;
 
-            foreach (var info in infos.EnumerateObjects())
+            foreach (DispatchObject info in infos.EnumerateObjects())
             {
                 try
                 {
@@ -87,7 +87,7 @@ public static class ScanService
         });
 
         // Kick off capabilities queries for all found scanners
-        foreach (var scanner in scanners)
+        foreach (ScannerInfo? scanner in scanners)
             _ = GetCapabilitiesAsync(scanner.DeviceId);
 
         return scanners;
@@ -104,10 +104,10 @@ public static class ScanService
     {
         try
         {
-            var props = deviceInfo.GetObject("Properties");
+            DispatchObject? props = deviceInfo.GetObject("Properties");
             if (props == null) return "Scanner";
 
-            foreach (var prop in props.EnumerateObjects())
+            foreach (DispatchObject prop in props.EnumerateObjects())
             {
                 try
                 {
@@ -130,28 +130,28 @@ public static class ScanService
     {
         lock (_capsCache)
         {
-            if (_capsCache.TryGetValue(deviceId, out var cached))
+            if (_capsCache.TryGetValue(deviceId, out Task<ScannerCapabilities>? cached))
                 return cached;
         }
 
-        var task = RunOnStaThread(() =>
+        Task<ScannerCapabilities> task = RunOnStaThread(() =>
         {
-            var dpiValues = new List<int>();
-            var colorModes = new List<ScanColorMode>();
+            List<int> dpiValues = new List<int>();
+            List<ScanColorMode> colorModes = new List<ScanColorMode>();
 
-            var device = ConnectDevice(deviceId);
+            DispatchObject? device = ConnectDevice(deviceId);
             if (device == null)
                 return new ScannerCapabilities([300], [ScanColorMode.Color]);
 
             try
             {
-                var scanItem = FirstItem(device);
-                var props = scanItem?.GetObject("Properties");
+                DispatchObject? scanItem = FirstItem(device);
+                DispatchObject? props = scanItem?.GetObject("Properties");
                 if (props != null)
                 {
                     dpiValues = ReadSupportedValues(props, 6147);
-                    var colorInts = ReadSupportedValues(props, 6146);
-                    foreach (var c in colorInts)
+                    List<int> colorInts = ReadSupportedValues(props, 6146);
+                    foreach (int c in colorInts)
                     {
                         if (Enum.IsDefined(typeof(ScanColorMode), c))
                             colorModes.Add((ScanColorMode)c);
@@ -176,17 +176,17 @@ public static class ScanService
 
     private static List<int> ReadSupportedValues(DispatchObject properties, int propertyId)
     {
-        var values = new List<int>();
+        List<int> values = new List<int>();
         try
         {
-            var prop = FindProperty(properties, propertyId);
+            DispatchObject? prop = FindProperty(properties, propertyId);
             if (prop == null) return values;
 
             int subType = prop.GetInt("SubType");
 
             if (subType == 1) // WiaSubType.wiaSubTypeList
             {
-                var subValues = prop.GetObject("SubTypeValues");
+                DispatchObject? subValues = prop.GetObject("SubTypeValues");
                 if (subValues != null)
                 {
                     foreach (int val in subValues.EnumerateInts())
@@ -204,7 +204,7 @@ public static class ScanService
                 // If the range produces too many entries, pick common values within range
                 if (values.Count > 20)
                 {
-                    var common = new[] { 75, 100, 150, 200, 300, 600, 1200 };
+                    int[] common = new[] { 75, 100, 150, 200, 300, 600, 1200 };
                     values = common.Where(d => d >= min && d <= max).ToList();
                     if (values.Count == 0) values = [min, max];
                 }
@@ -221,13 +221,13 @@ public static class ScanService
     {
         return RunOnStaThread(() =>
         {
-            var device = ConnectDevice(deviceId);
+            DispatchObject? device = ConnectDevice(deviceId);
             if (device == null) return null;
 
-            var scanItem = FirstItem(device);
+            DispatchObject? scanItem = FirstItem(device);
             if (scanItem == null) return null;
 
-            var props = scanItem.GetObject("Properties");
+            DispatchObject? props = scanItem.GetObject("Properties");
             if (props != null)
             {
                 TrySetProperty(props, 6147, 75);  // Low DPI for fast preview
@@ -237,10 +237,10 @@ public static class ScanService
 
             try
             {
-                var image = scanItem.Call("Transfer", WiaFormatBmp);
+                DispatchObject? image = scanItem.Call("Transfer", WiaFormatBmp);
                 if (image == null) return null;
 
-                var path = Path.Combine(ScratchFolder, $"preview_{Guid.NewGuid():N}.bmp");
+                string path = Path.Combine(ScratchFolder, $"preview_{Guid.NewGuid():N}.bmp");
                 image.Call("SaveFile", path);
                 return (string?)path;
             }
@@ -259,12 +259,12 @@ public static class ScanService
     {
         return RunOnStaThread(() =>
         {
-            var device = ConnectDevice(deviceId);
+            DispatchObject? device = ConnectDevice(deviceId);
             if (device == null)
                 throw new InvalidOperationException("Scanner not found. It may have been disconnected.");
 
-            var scanItem = FirstItem(device);
-            var props = scanItem?.GetObject("Properties");
+            DispatchObject? scanItem = FirstItem(device);
+            DispatchObject? props = scanItem?.GetObject("Properties");
             if (scanItem == null || props == null)
                 throw new InvalidOperationException("Scanner not found. It may have been disconnected.");
 
@@ -314,20 +314,20 @@ public static class ScanService
             }
             if (image == null) return null;
 
-            var imagePath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.bmp");
+            string imagePath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.bmp");
             image.Call("SaveFile", imagePath);
 
-            var pdfPath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.pdf");
+            string pdfPath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.pdf");
             try
             {
-                using var doc = new PdfDocument();
-                var page = doc.AddPage();
+                using PdfDocument doc = new PdfDocument();
+                PdfPage page = doc.AddPage();
 
-                using var xImage = XImage.FromFile(imagePath);
+                using XImage xImage = XImage.FromFile(imagePath);
                 page.Width = XUnit.FromPoint(xImage.PointWidth);
                 page.Height = XUnit.FromPoint(xImage.PointHeight);
 
-                using var gfx = XGraphics.FromPdfPage(page);
+                using XGraphics gfx = XGraphics.FromPdfPage(page);
                 gfx.DrawImage(xImage, 0, 0, page.Width.Point, page.Height.Point);
 
                 doc.Save(pdfPath);
@@ -343,13 +343,13 @@ public static class ScanService
 
     private static DispatchObject? ConnectDevice(string deviceId)
     {
-        var dm = DispatchObject.CoCreate("WIA.DeviceManager");
+        DispatchObject? dm = DispatchObject.CoCreate("WIA.DeviceManager");
         if (dm == null) return null;
 
-        var infos = dm.GetObject("DeviceInfos");
+        DispatchObject? infos = dm.GetObject("DeviceInfos");
         if (infos == null) return null;
 
-        foreach (var info in infos.EnumerateObjects())
+        foreach (DispatchObject info in infos.EnumerateObjects())
         {
             try
             {
@@ -364,10 +364,10 @@ public static class ScanService
     /// <summary>Return the first scan item of a connected device (WIA Items is 1-based).</summary>
     private static DispatchObject? FirstItem(DispatchObject device)
     {
-        var items = device.GetObject("Items");
+        DispatchObject? items = device.GetObject("Items");
         if (items == null) return null;
 
-        foreach (var item in items.EnumerateObjects())
+        foreach (DispatchObject item in items.EnumerateObjects())
             return item;
 
         return null;
@@ -376,7 +376,7 @@ public static class ScanService
     /// <summary>Find a WIA property in a Properties collection by its numeric PropertyID.</summary>
     private static DispatchObject? FindProperty(DispatchObject properties, int propertyId)
     {
-        foreach (var prop in properties.EnumerateObjects())
+        foreach (DispatchObject prop in properties.EnumerateObjects())
         {
             try
             {
@@ -401,7 +401,7 @@ public static class ScanService
     {
         try
         {
-            var prop = FindProperty(properties, propertyId);
+            DispatchObject? prop = FindProperty(properties, propertyId);
             return prop?.GetInt("Value") ?? 0;
         }
         catch { return 0; }
@@ -409,8 +409,8 @@ public static class ScanService
 
     private static Task<T> RunOnStaThread<T>(Func<T> func)
     {
-        var tcs = new TaskCompletionSource<T>();
-        var thread = new Thread(() =>
+        TaskCompletionSource<T> tcs = new TaskCompletionSource<T>();
+        Thread thread = new Thread(() =>
         {
             try { tcs.SetResult(func()); }
             catch (Exception ex) { tcs.SetException(ex); }

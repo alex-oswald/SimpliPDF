@@ -1,0 +1,10 @@
+# EditorConfig for SimpliPDF (https://editorconfig.org)
+root = true
+
+[*.cs]
+# Require explicit types everywhere; never use 'var'.
+# This makes the rule in .github/copilot-instructions.md enforceable and fixable via `dotnet format`.
+csharp_style_var_for_built_in_types = false:warning
+csharp_style_var_when_type_is_apparent = false:warning
+csharp_style_var_elsewhere = false:warning
+dotnet_diagnostic.IDE0008.severity = warning

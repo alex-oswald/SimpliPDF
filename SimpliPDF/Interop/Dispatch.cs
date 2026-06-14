@@ -101,7 +101,7 @@ internal sealed unsafe class DispatchObject
         nint pUnk = Marshal.GetIUnknownForObject(ppv);
         try
         {
-            var disp = (IDispatch)s_comWrappers.GetOrCreateObjectForComInstance(pUnk, CreateObjectFlags.None);
+            IDispatch disp = (IDispatch)s_comWrappers.GetOrCreateObjectForComInstance(pUnk, CreateObjectFlags.None);
             return new DispatchObject(disp);
         }
         finally
@@ -143,7 +143,7 @@ internal sealed unsafe class DispatchObject
 
     public void Set(string name, int value)
     {
-        var arg = ComVariant.Create(value);
+        ComVariant arg = ComVariant.Create(value);
         try
         {
             using ComVariant _ = Invoke(name, DISPATCH_PROPERTYPUT, new[] { arg });
@@ -195,7 +195,7 @@ internal sealed unsafe class DispatchObject
         nint p = v.GetRawDataRef<nint>();
         if (p == 0) return null;
 
-        var en = (IEnumVARIANT)s_comWrappers.GetOrCreateObjectForComInstance(p, CreateObjectFlags.None);
+        IEnumVARIANT en = (IEnumVARIANT)s_comWrappers.GetOrCreateObjectForComInstance(p, CreateObjectFlags.None);
         return new EnumVariant(en);
     }
 
@@ -220,14 +220,14 @@ internal sealed unsafe class DispatchObject
     {
         // COM expects arguments in reverse order.
         int n = args.Length;
-        var rev = new ComVariant[n];
+        ComVariant[] rev = new ComVariant[n];
         for (int i = 0; i < n; i++)
             rev[i] = args[n - 1 - i];
 
         fixed (ComVariant* pArgs = rev)
         {
             int namedPut = DISPID_PROPERTYPUT;
-            var dp = new DISPPARAMS
+            DISPPARAMS dp = new DISPPARAMS
             {
                 rgvarg = (nint)pArgs,
                 cArgs = (uint)n,
@@ -263,13 +263,13 @@ internal sealed unsafe class DispatchObject
         nint p = v.GetRawDataRef<nint>();
         if (p == 0) return null;
 
-        var disp = (IDispatch)s_comWrappers.GetOrCreateObjectForComInstance(p, CreateObjectFlags.None);
+        IDispatch disp = (IDispatch)s_comWrappers.GetOrCreateObjectForComInstance(p, CreateObjectFlags.None);
         return new DispatchObject(disp);
     }
 
     private static ComVariant[] ToVariants(object[] args)
     {
-        var arr = new ComVariant[args.Length];
+        ComVariant[] arr = new ComVariant[args.Length];
         for (int i = 0; i < args.Length; i++)
         {
             arr[i] = args[i] switch
