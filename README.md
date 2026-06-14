@@ -45,11 +45,27 @@ Then double-click the `.msix` file to install.
 # Release build for x64
 .\build.ps1 -Architectures x64 -Configuration Release
 
+# Self-contained native build for x64 + arm64 (runs with no install)
+.\build.ps1 -Publish -Configuration Release
+
 # Build signed MSIX packages
 .\build.ps1 -Architectures x64,arm64 -Configuration Release -Msix
 ```
 
 Or open `SimpliPDF.slnx` in Visual Studio 2022+ and press F5.
+
+### Self-contained native build
+
+`-Publish` produces an unpackaged, self-contained build per architecture under:
+
+```
+SimpliPDF\bin\<Configuration>\net10.0-windows10.0.26100.0\win-<arch>\publish\
+```
+
+The folder bundles both the .NET runtime and the Windows App SDK, so it runs on any
+Windows 10 (1809+) machine with nothing pre-installed — just copy the folder and run
+`SimpliPDF.exe`. Because WinUI 3 depends on native framework DLLs, the output is a folder
+(one main exe plus those DLLs), not a single file.
 
 ## Tech Stack
 

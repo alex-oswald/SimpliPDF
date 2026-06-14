@@ -63,9 +63,15 @@
 
   <!-- Publish Properties -->
   <PropertyGroup>
+    <!-- ReadyToRun precompiles IL to native for faster startup in published (non-Debug) builds. -->
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
-    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+
+    <!-- Trimming is kept ONLY for the MSIX/Store package. The unpackaged, self-contained
+         build is intentionally left untrimmed: the WIA scanner uses `dynamic` COM interop and
+         PDFsharp uses reflection, both of which the trimmer can silently break (IL2026).
+         Native AOT (a later phase) will require revisiting this. -->
+    <PublishTrimmed Condition="'$(Configuration)' != 'Debug' and '$(WindowsPackageType)' == 'MSIX'">true</PublishTrimmed>
+    <PublishTrimmed Condition="'$(PublishTrimmed)' == ''">false</PublishTrimmed>
   </PropertyGroup>
 </Project>
