@@ -68,9 +68,10 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
 
     <!-- Trimming is kept ONLY for the MSIX/Store package. The unpackaged, self-contained
-         build is intentionally left untrimmed: the WIA scanner uses `dynamic` COM interop and
-         PDFsharp uses reflection, both of which the trimmer can silently break (IL2026).
-         Native AOT (a later phase) will require revisiting this. -->
+         build is intentionally left untrimmed: PDFsharp uses reflection, which the trimmer can
+         silently break (IL2026). The WIA scanner no longer uses `dynamic` (it now uses a
+         source-generated IDispatch helper in Interop/Dispatch.cs), but PDFsharp still blocks a
+         fully trimmed/AOT build. Native AOT (a later phase) will require revisiting this. -->
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug' and '$(WindowsPackageType)' == 'MSIX'">true</PublishTrimmed>
     <PublishTrimmed Condition="'$(PublishTrimmed)' == ''">false</PublishTrimmed>
   </PropertyGroup>
