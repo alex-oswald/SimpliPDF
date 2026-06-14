@@ -1,0 +1,71 @@
+name: Publish (Native AOT)
+
+# Builds the self-contained, Native AOT, unpackaged app for x64 and ARM64 on a
+# clean windows-latest runner (which ships the "Desktop development with C++"
+# workload + ARM64 build tools that Native AOT's native linker requires). This is
+# the end-to-end gate for the AOT configuration in SimpliPDF.csproj.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  aot:
+    runs-on: windows-latest
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      PROJECT: SimpliPDF/SimpliPDF.csproj
+      TFM: net10.0-windows10.0.26100.0
+
+    strategy:
+      # Keep x64 green even if the ARM64 toolchain has a hiccup, and vice versa.
+      fail-fast: false
+      matrix:
+        platform: [x64, arm64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore ${{ env.PROJECT }} -p:Platform=${{ matrix.platform }}
+
+      - name: Publish self-contained (Native AOT)
+        shell: pwsh
+        run: |
+          dotnet publish ${{ env.PROJECT }} `
+            -c Release `
+            -p:Platform=${{ matrix.platform }} `
+            -p:PublishProfile=win-${{ matrix.platform }}
+
+      - name: Verify the output is really Native AOT
+        shell: pwsh
+        run: |
+          $pub = "SimpliPDF/bin/Release/$env:TFM/win-${{ matrix.platform }}/publish"
+          $exe = Get-Item "$pub/SimpliPDF.exe" -ErrorAction Stop
+          $sizeMb = [math]::Round($exe.Length / 1MB, 2)
+          Write-Host "SimpliPDF.exe = $sizeMb MB"
+          # A JIT self-contained fallback ships the runtime (coreclr.dll) next to a
+          # tiny ~0.3 MB apphost; a Native AOT build has neither.
+          if (Test-Path "$pub/coreclr.dll") {
+            throw "coreclr.dll present -> JIT runtime, NOT Native AOT."
+          }
+          if ($sizeMb -lt 5) {
+            throw "SimpliPDF.exe is only $sizeMb MB -> looks like a JIT apphost, not a Native AOT binary."
+          }
+          Write-Host "Verified: Native AOT output."
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SimpliPDF-aot-${{ matrix.platform }}
+          path: SimpliPDF/bin/Release/${{ env.TFM }}/win-${{ matrix.platform }}/publish/

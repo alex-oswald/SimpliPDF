@@ -61,10 +61,20 @@ CI (`.github/workflows/`) builds signed MSIX packages for x64 and ARM64 on `wind
 
 ## Trimming / Native AOT
 
-- The self-contained build is intentionally **untrimmed**: PDFsharp (6.2.4) is reflection-based and
-  the trimmer can silently break it (IL2026). Trimming is enabled only for the MSIX/Store package.
-- `PublishAot` is **not** enabled yet. Still, keep new code trim / AOT friendly (no `dynamic`, no
-  unbounded reflection, prefer source generators) so a future AOT migration stays viable.
+- **Native AOT** is enabled for the self-contained, unpackaged **Release** publish on **x64 and
+  ARM64** (`build.ps1 -Publish -Configuration Release`). x86 is unsupported by Native AOT and falls
+  back to a self-contained JIT build; **Debug** always publishes JIT. The switch lives in
+  `SimpliPDF.csproj` (`SimpliPdfUseAot`, keyed off the `win-x64` / `win-arm64` publish profile); it
+  implies trimming and disables ReadyToRun. Building AOT needs the VS **"Desktop development with
+  C++"** workload (`link.exe`, ARM64 also needs the C++ ARM64 build tools); the
+  `Publish (Native AOT)` workflow builds it on `windows-latest`.
+- The **MSIX/Store** package keeps the framework-dependent, **trimmed** (non-AOT) model.
+- PDFsharp (6.2.4) carries `[DynamicallyAccessedMembers]` annotations across its reflection paths
+  and uses no `Reflection.Emit` / `MakeGenericType` / `DynamicMethod`, so it trims and compiles
+  under AOT — but empira does not officially certify AOT, so **smoke-test PDF open / merge / rotate /
+  split and image→PDF on an AOT build** after touching `PdfService` or the scan path.
+- Keep new code trim / AOT friendly (no `dynamic`, no unbounded reflection, prefer source
+  generators).
 
 ## Before opening a PR
 

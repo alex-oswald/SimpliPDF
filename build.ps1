@@ -13,6 +13,12 @@
     If set, publishes a self-contained, unpackaged app (bundles the .NET runtime
     and Windows App SDK so it runs on any machine with no install).
 
+    For Release, x64 and ARM64 are published with Native AOT (compiled to native
+    code, no JIT); x86 falls back to a self-contained JIT build because Native AOT
+    does not support x86. Debug always publishes JIT. Building the AOT targets
+    requires the Visual Studio "Desktop development with C++" workload (link.exe);
+    ARM64 additionally needs the C++ ARM64 build tools.
+
 .PARAMETER Msix
     If set, builds a signed MSIX package using the dev certificate.
 
@@ -60,6 +66,8 @@ foreach ($arch in $Architectures) {
     } elseif ($Publish) {
         # Self-contained, unpackaged native build via the per-arch publish profile.
         # Bundles the .NET runtime and the Windows App SDK so it runs with no install.
+        # For Release, the win-x64 / win-arm64 profiles compile with Native AOT (see the
+        # SimpliPdfUseAot logic in SimpliPDF.csproj); win-x86 stays a self-contained JIT build.
         dotnet publish $project `
             -c $Configuration `
             -p:Platform=$arch `
@@ -77,7 +85,8 @@ foreach ($arch in $Architectures) {
 
     if ($Publish) {
         $outDir = Join-Path $root "SimpliPDF\bin\$Configuration\$tfm\win-$arch\publish"
-        Write-Host "OK  $Configuration | $arch  ->  $outDir" -ForegroundColor Green
+        $mode = if ($Configuration -ne "Debug" -and ($arch -eq "x64" -or $arch -eq "arm64")) { "Native AOT" } else { "JIT (self-contained)" }
+        Write-Host "OK  $Configuration | $arch | $mode  ->  $outDir" -ForegroundColor Green
     }
     else {
         Write-Host "OK  $Configuration | $arch" -ForegroundColor Green

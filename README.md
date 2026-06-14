@@ -62,10 +62,18 @@ Or open `SimpliPDF.slnx` in Visual Studio 2022+ and press F5.
 SimpliPDF\bin\<Configuration>\net10.0-windows10.0.26100.0\win-<arch>\publish\
 ```
 
-The folder bundles both the .NET runtime and the Windows App SDK, so it runs on any
-Windows 10 (1809+) machine with nothing pre-installed — just copy the folder and run
-`SimpliPDF.exe`. Because WinUI 3 depends on native framework DLLs, the output is a folder
-(one main exe plus those DLLs), not a single file.
+The folder bundles the Windows App SDK and the .NET runtime — or, for Native AOT targets,
+compiles the runtime straight into the executable — so it runs on any Windows 10 (1809+)
+machine with nothing pre-installed: just copy the folder and run `SimpliPDF.exe`. Because
+WinUI 3 depends on native framework DLLs, the output is a folder (one main exe plus those
+DLLs), not a single file.
+
+> **Native AOT:** Release publishes for **x64** and **ARM64** are compiled with
+> [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/) — native machine
+> code with no JIT, for faster startup and a smaller footprint. **x86** publishes as a
+> self-contained JIT build (Native AOT does not support x86) and **Debug** always publishes JIT.
+> Building the AOT targets requires the Visual Studio **"Desktop development with C++"** workload
+> (ARM64 also needs the C++ ARM64 build tools); CI builds them on `windows-latest`.
 
 ## Tech Stack
 
