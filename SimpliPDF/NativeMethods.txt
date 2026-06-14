@@ -1,4 +1,5 @@
 CoCreateInstance
+CLSIDFromProgID
 IFileOpenDialog
 IFileSaveDialog
 IShellItem

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
+using SimpliPDF.Interop;
 
 namespace SimpliPDF.Services;
 
@@ -16,7 +17,9 @@ public enum ScanColorMode { Color = 1, Grayscale = 2, BlackAndWhite = 4 }
 public record ScanCropRegion(double Left, double Top, double Right, double Bottom);
 
 /// <summary>
-/// WIA-based scanning service. All COM calls run on a dedicated STA thread.
+/// WIA-based scanning service. All COM calls run on a dedicated STA thread and use the
+/// <see cref="DispatchObject"/> late-binding helper (no <c>dynamic</c>), keeping the service
+/// free of the Microsoft.CSharp runtime binder so it is compatible with trimming / Native AOT.
 /// Scanned PDFs are stored in a session scratch folder and cleaned up on app exit.
 /// </summary>
 public static class ScanService
@@ -61,18 +64,20 @@ public static class ScanService
         var scanners = await RunOnStaThread(() =>
         {
             var result = new List<ScannerInfo>();
-            var dmType = Type.GetTypeFromProgID("WIA.DeviceManager");
-            if (dmType == null) return result;
+            var dm = DispatchObject.CoCreate("WIA.DeviceManager");
+            if (dm == null) return result;
 
-            dynamic dm = Activator.CreateInstance(dmType)!;
-            foreach (dynamic info in dm.DeviceInfos)
+            var infos = dm.GetObject("DeviceInfos");
+            if (infos == null) return result;
+
+            foreach (var info in infos.EnumerateObjects())
             {
                 try
                 {
-                    int type = (int)info.Type;
+                    int type = info.GetInt("Type");
                     if (type != 1 && type != 2) continue;
 
-                    string id = info.DeviceID;
+                    string id = info.GetString("DeviceID");
                     string name = GetDeviceName(info);
                     result.Add(new ScannerInfo(id, name));
                 }
@@ -95,17 +100,22 @@ public static class ScanService
         lock (_capsCache) _capsCache.Clear();
     }
 
-    private static string GetDeviceName(dynamic deviceInfo)
+    private static string GetDeviceName(DispatchObject deviceInfo)
     {
         try
         {
-            foreach (dynamic prop in deviceInfo.Properties)
+            var props = deviceInfo.GetObject("Properties");
+            if (props == null) return "Scanner";
+
+            foreach (var prop in props.EnumerateObjects())
             {
                 try
                 {
-                    string pname = prop.Name?.ToString() ?? "";
-                    if (pname == "Name")
-                        return ((object)prop.Value)?.ToString() ?? "Scanner";
+                    if (prop.GetString("Name") == "Name")
+                    {
+                        string val = prop.GetString("Value");
+                        return string.IsNullOrEmpty(val) ? "Scanner" : val;
+                    }
                 }
                 catch { }
             }
@@ -135,13 +145,17 @@ public static class ScanService
 
             try
             {
-                dynamic scanItem = device.Items[1];
-                dpiValues = ReadSupportedValues(scanItem.Properties, 6147);
-                var colorInts = ReadSupportedValues(scanItem.Properties, 6146);
-                foreach (var c in colorInts)
+                var scanItem = FirstItem(device);
+                var props = scanItem?.GetObject("Properties");
+                if (props != null)
                 {
-                    if (Enum.IsDefined(typeof(ScanColorMode), c))
-                        colorModes.Add((ScanColorMode)c);
+                    dpiValues = ReadSupportedValues(props, 6147);
+                    var colorInts = ReadSupportedValues(props, 6146);
+                    foreach (var c in colorInts)
+                    {
+                        if (Enum.IsDefined(typeof(ScanColorMode), c))
+                            colorModes.Add((ScanColorMode)c);
+                    }
                 }
             }
             catch { }
@@ -160,34 +174,30 @@ public static class ScanService
         return task;
     }
 
-    private static List<int> ReadSupportedValues(dynamic properties, int propertyId)
+    private static List<int> ReadSupportedValues(DispatchObject properties, int propertyId)
     {
         var values = new List<int>();
         try
         {
-            dynamic? prop = null;
-            foreach (dynamic p in properties)
-            {
-                if ((int)p.PropertyID == propertyId)
-                {
-                    prop = p;
-                    break;
-                }
-            }
+            var prop = FindProperty(properties, propertyId);
             if (prop == null) return values;
 
-            int subType = (int)prop.SubType;
+            int subType = prop.GetInt("SubType");
 
             if (subType == 1) // WiaSubType.wiaSubTypeList
             {
-                foreach (object val in prop.SubTypeValues)
-                    values.Add(Convert.ToInt32(val));
+                var subValues = prop.GetObject("SubTypeValues");
+                if (subValues != null)
+                {
+                    foreach (int val in subValues.EnumerateInts())
+                        values.Add(val);
+                }
             }
             else if (subType == 2) // WiaSubType.wiaSubTypeRange
             {
-                int min = (int)prop.SubTypeMin;
-                int max = (int)prop.SubTypeMax;
-                int step = (int)prop.SubTypeStep;
+                int min = prop.GetInt("SubTypeMin");
+                int max = prop.GetInt("SubTypeMax");
+                int step = prop.GetInt("SubTypeStep");
                 if (step <= 0) step = 1;
                 for (int v = min; v <= max; v += step)
                     values.Add(v);
@@ -214,16 +224,24 @@ public static class ScanService
             var device = ConnectDevice(deviceId);
             if (device == null) return null;
 
-            dynamic scanItem = device.Items[1];
-            TrySetProperty(scanItem.Properties, 6147, 75);  // Low DPI for fast preview
-            TrySetProperty(scanItem.Properties, 6148, 75);
-            TrySetProperty(scanItem.Properties, 6146, 1);   // Color
+            var scanItem = FirstItem(device);
+            if (scanItem == null) return null;
+
+            var props = scanItem.GetObject("Properties");
+            if (props != null)
+            {
+                TrySetProperty(props, 6147, 75);  // Low DPI for fast preview
+                TrySetProperty(props, 6148, 75);
+                TrySetProperty(props, 6146, 1);   // Color
+            }
 
             try
             {
-                dynamic image = scanItem.Transfer(WiaFormatBmp);
+                var image = scanItem.Call("Transfer", WiaFormatBmp);
+                if (image == null) return null;
+
                 var path = Path.Combine(ScratchFolder, $"preview_{Guid.NewGuid():N}.bmp");
-                image.SaveFile(path);
+                image.Call("SaveFile", path);
                 return (string?)path;
             }
             catch (COMException)
@@ -245,17 +263,21 @@ public static class ScanService
             if (device == null)
                 throw new InvalidOperationException("Scanner not found. It may have been disconnected.");
 
-            dynamic scanItem = device.Items[1];
-            TrySetProperty(scanItem.Properties, 6147, dpi);
-            TrySetProperty(scanItem.Properties, 6148, dpi);
-            TrySetProperty(scanItem.Properties, 6146, (int)colorMode);
+            var scanItem = FirstItem(device);
+            var props = scanItem?.GetObject("Properties");
+            if (scanItem == null || props == null)
+                throw new InvalidOperationException("Scanner not found. It may have been disconnected.");
+
+            TrySetProperty(props, 6147, dpi);
+            TrySetProperty(props, 6148, dpi);
+            TrySetProperty(props, 6146, (int)colorMode);
 
             // Apply crop region via WIA extent properties
             if (crop != null)
             {
                 // Read the full scan area at the current DPI
-                int fullWidth = TryGetPropertyValue(scanItem.Properties, 6151);
-                int fullHeight = TryGetPropertyValue(scanItem.Properties, 6152);
+                int fullWidth = TryGetPropertyValue(props, 6151);
+                int fullHeight = TryGetPropertyValue(props, 6152);
 
                 // Fallback: estimate from standard letter size at selected DPI
                 if (fullWidth <= 0) fullWidth = (int)(8.5 * dpi);
@@ -271,28 +293,29 @@ public static class ScanService
                 if (yPos + yExtent > fullHeight) yExtent = fullHeight - yPos;
 
                 // Reset position to origin first so shrinking extent can't fail
-                TrySetProperty(scanItem.Properties, 6149, 0);
-                TrySetProperty(scanItem.Properties, 6150, 0);
+                TrySetProperty(props, 6149, 0);
+                TrySetProperty(props, 6150, 0);
                 // Set desired extent
-                TrySetProperty(scanItem.Properties, 6151, xExtent);
-                TrySetProperty(scanItem.Properties, 6152, yExtent);
+                TrySetProperty(props, 6151, xExtent);
+                TrySetProperty(props, 6152, yExtent);
                 // Set desired position
-                TrySetProperty(scanItem.Properties, 6149, xPos);
-                TrySetProperty(scanItem.Properties, 6150, yPos);
+                TrySetProperty(props, 6149, xPos);
+                TrySetProperty(props, 6150, yPos);
             }
 
-            dynamic image;
+            DispatchObject? image;
             try
             {
-                image = scanItem.Transfer(WiaFormatBmp);
+                image = scanItem.Call("Transfer", WiaFormatBmp);
             }
             catch (COMException ex) when (ex.HResult == unchecked((int)0x80210006))
             {
                 return null;
             }
+            if (image == null) return null;
 
             var imagePath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.bmp");
-            image.SaveFile(imagePath);
+            image.Call("SaveFile", imagePath);
 
             var pdfPath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.pdf");
             try
@@ -318,39 +341,68 @@ public static class ScanService
         });
     }
 
-    private static dynamic? ConnectDevice(string deviceId)
+    private static DispatchObject? ConnectDevice(string deviceId)
     {
-        var dmType = Type.GetTypeFromProgID("WIA.DeviceManager");
-        if (dmType == null) return null;
+        var dm = DispatchObject.CoCreate("WIA.DeviceManager");
+        if (dm == null) return null;
 
-        dynamic dm = Activator.CreateInstance(dmType)!;
-        foreach (dynamic info in dm.DeviceInfos)
+        var infos = dm.GetObject("DeviceInfos");
+        if (infos == null) return null;
+
+        foreach (var info in infos.EnumerateObjects())
         {
-            if ((string)info.DeviceID == deviceId)
-                return info.Connect();
+            try
+            {
+                if (info.GetString("DeviceID") == deviceId)
+                    return info.Call("Connect");
+            }
+            catch { }
         }
         return null;
     }
 
-    private static void TrySetProperty(dynamic properties, int propertyId, int value)
+    /// <summary>Return the first scan item of a connected device (WIA Items is 1-based).</summary>
+    private static DispatchObject? FirstItem(DispatchObject device)
+    {
+        var items = device.GetObject("Items");
+        if (items == null) return null;
+
+        foreach (var item in items.EnumerateObjects())
+            return item;
+
+        return null;
+    }
+
+    /// <summary>Find a WIA property in a Properties collection by its numeric PropertyID.</summary>
+    private static DispatchObject? FindProperty(DispatchObject properties, int propertyId)
+    {
+        foreach (var prop in properties.EnumerateObjects())
+        {
+            try
+            {
+                if (prop.GetInt("PropertyID") == propertyId)
+                    return prop;
+            }
+            catch { }
+        }
+        return null;
+    }
+
+    private static void TrySetProperty(DispatchObject properties, int propertyId, int value)
     {
         try
         {
-            object propIdObj = propertyId;
-            dynamic prop = properties.get_Item(ref propIdObj);
-            object val = value;
-            prop.set_Value(ref val);
+            FindProperty(properties, propertyId)?.Set("Value", value);
         }
         catch { }
     }
 
-    private static int TryGetPropertyValue(dynamic properties, int propertyId)
+    private static int TryGetPropertyValue(DispatchObject properties, int propertyId)
     {
         try
         {
-            object propIdObj = propertyId;
-            dynamic prop = properties.get_Item(ref propIdObj);
-            return Convert.ToInt32(prop.Value);
+            var prop = FindProperty(properties, propertyId);
+            return prop?.GetInt("Value") ?? 0;
         }
         catch { return 0; }
     }
