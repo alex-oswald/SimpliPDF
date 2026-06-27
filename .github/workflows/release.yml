@@ -1,0 +1,184 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for a manual test build (e.g. 1.2.3). Manual runs build artifacts only and do not publish a GitHub Release.'
+        required: false
+        default: '0.0.0-dev'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }} MSI
+    runs-on: windows-latest
+    # Stable tags (vX.Y.Z) target the `release` environment (production
+    # signing vars, any approval gates). Prerelease tags (vX.Y.Z-betaN,
+    # -rcN, -alphaN) and manual workflow_dispatch runs target `development`,
+    # which has its own signing vars and federated credential.
+    environment: ${{ (github.ref_type == 'tag' && !contains(github.ref_name, '-')) && 'release' || 'development' }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            rid: win-x64
+            platform: x64
+            wixarch: x64
+            utilca: Wix4UtilCA_X64
+          - arch: arm64
+            rid: win-arm64
+            platform: ARM64
+            wixarch: arm64
+            utilca: Wix4UtilCA_A64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $raw = $env:GITHUB_REF_NAME -replace '^v', ''
+          } else {
+            $raw = '${{ github.event.inputs.version }}'
+          }
+          # MSI ProductVersion must be numeric major.minor.patch.
+          $core = ($raw -split '[-+]')[0]
+          $parts = @($core -split '\.')
+          while ($parts.Count -lt 3) { $parts += '0' }
+          $core = ($parts[0..2] -join '.')
+          if ($core -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Could not derive a numeric version from '$raw'. Tag releases as vMAJOR.MINOR.PATCH (e.g. v1.2.3)."
+          }
+          "release_version=$raw" >> $env:GITHUB_OUTPUT
+          "msi_version=$core"   >> $env:GITHUB_OUTPUT
+          Write-Host "release_version=$raw  msi_version=$core"
+
+      - name: Publish (self-contained)
+        shell: pwsh
+        run: |
+          dotnet publish SimpliPDF/SimpliPDF.csproj `
+            -c Release `
+            -r ${{ matrix.rid }} `
+            -p:Platform=${{ matrix.platform }} `
+            --self-contained true `
+            -p:WindowsAppSDKSelfContained=true `
+            -p:WindowsPackageType=None `
+            -p:DebugType=none `
+            -p:DebugSymbols=false `
+            -p:Version=${{ steps.version.outputs.release_version }} `
+            -p:AssemblyVersion=${{ steps.version.outputs.msi_version }} `
+            -p:FileVersion=${{ steps.version.outputs.msi_version }} `
+            -p:InformationalVersion=${{ steps.version.outputs.release_version }} `
+            -o publish/${{ matrix.arch }}
+
+      - name: Azure login (for Trusted Signing)
+        if: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT != '' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign SimpliPDF.exe
+        if: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT != '' }}
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_TRUSTED_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}/publish/${{ matrix.arch }}
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          $wixVersion = '6.0.2'
+          dotnet tool install --global wix --version $wixVersion
+          "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
+          # Pin the util extension to the same WiX v6 version; 7.x is
+          # incompatible with WiX v6 and wildcard version refs are not accepted.
+          wix extension add --global WixToolset.Util.wixext/$wixVersion
+
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          $pub = (Resolve-Path "publish/${{ matrix.arch }}").Path
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          wix build installer/SimpliPDF.wxs `
+            -arch ${{ matrix.wixarch }} `
+            -ext WixToolset.Util.wixext `
+            -d PublishDir="$pub" `
+            -d ProductVersion=${{ steps.version.outputs.msi_version }} `
+            -d UtilCA=${{ matrix.utilca }} `
+            -o "dist/SimpliPDF-${{ steps.version.outputs.release_version }}-${{ matrix.arch }}.msi"
+
+      - name: Sign MSI
+        if: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT != '' }}
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_TRUSTED_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}/dist
+          files-folder-filter: msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: msi-${{ matrix.arch }}
+          path: dist/*.msi
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.msi > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: SimpliPDF ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.msi
+            dist/SHA256SUMS.txt

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SimpliPDF MSI installer (WiX v6).
+
+  Per-user install (no admin/UAC) under %LocalAppData%\Programs\SimpliPDF.
+  The published, self-contained app folder is harvested wholesale via <Files>.
+
+  Uses the WixToolset.Util.wixext extension for <util:CloseApplication>, so
+  the build command must include `-ext WixToolset.Util.wixext`. Pin the
+  util extension to the same WiX v6 version (e.g. WixToolset.Util.wixext/6.0.2);
+  wildcard refs are rejected and 7.x is incompatible with WiX v6.
+
+  Built from the workflow / locally with:
+    wix build installer\SimpliPDF.wxs ^
+      -arch <x64|arm64> ^
+      -ext WixToolset.Util.wixext ^
+      -d PublishDir=<absolute path to publish folder> ^
+      -d ProductVersion=<x.y.z> ^
+      -d UtilCA=<Wix4UtilCA_X64|Wix4UtilCA_A64> ^
+      -o SimpliPDF-<version>-<arch>.msi
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package
+    Name="SimpliPDF"
+    Manufacturer="Alex Oswald"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="B252699F-CECE-4402-A672-F6E26F9C5817"
+    Scope="perUser"
+    Compressed="yes"
+    Language="1033">
+
+    <!--
+      Install the new version first, then remove the old one. Safer than the
+      default (afterInstallValidate) because if the new install fails the
+      user is left with the previous working version instead of nothing.
+    -->
+    <MajorUpgrade
+      Schedule="afterInstallExecute"
+      DowngradeErrorMessage="A newer version of SimpliPDF is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!--
+      Politely close a running SimpliPDF.exe before upgrading so the install
+      doesn't trip the Windows Installer "files in use" dialog or schedule a
+      reboot. CloseMessage/EndSessionMessage send WM_CLOSE/WM_QUERYENDSESSION
+      to the app's main window; TerminateProcess="5" force-terminates after
+      5 seconds as a fallback if the app doesn't exit on its own.
+    -->
+    <util:CloseApplication
+      Id="CloseSimpliPDF"
+      Target="SimpliPDF.exe"
+      Description="Please close SimpliPDF so the upgrade can continue."
+      CloseMessage="yes"
+      EndSessionMessage="yes"
+      RebootPrompt="no"
+      TerminateProcess="5" />
+
+    <!-- Add/Remove Programs metadata -->
+    <Icon Id="SimpliPDFIcon" SourceFile="$(var.PublishDir)\SimpliPDF.exe" />
+    <Property Id="ARPPRODUCTICON" Value="SimpliPDFIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/alex-oswald/SimpliPDF" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!--
+      Launch SimpliPDF.exe at the end of a fresh install / major upgrade.
+      Uses WixShellExec from WixUtilExtension. ShellExecute returns
+      immediately, so we don't need an async return type; Return="ignore"
+      keeps the install successful even if the launch itself fails (e.g.
+      AV blocks it). Condition NOT Installed AND NOT REMOVE skips uninstall
+      and the maintenance-mode reconfigure path.
+      $(var.UtilCA) is set per-arch by the workflow (Wix4UtilCA_X64 /
+      Wix4UtilCA_A64) so the right CustomAction DLL is invoked.
+
+      WixShellExecTarget must be populated at runtime via a type-51
+      property-setter CA — populating it at author time with
+      [INSTALLFOLDER]... isn't supported (WIX1077).
+    -->
+    <CustomAction Id="SetWixShellExecTarget"
+                  Property="WixShellExecTarget"
+                  Value="[INSTALLFOLDER]SimpliPDF.exe" />
+    <CustomAction Id="LaunchSimpliPDF"
+                  BinaryRef="$(var.UtilCA)"
+                  DllEntry="WixShellExec"
+                  Impersonate="yes"
+                  Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="SetWixShellExecTarget" After="InstallFinalize"
+              Condition="NOT Installed AND NOT REMOVE" />
+      <Custom Action="LaunchSimpliPDF" After="SetWixShellExecTarget"
+              Condition="NOT Installed AND NOT REMOVE" />
+    </InstallExecuteSequence>
+
+    <!-- Install location: %LocalAppData%\Programs\SimpliPDF -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="SimpliPDF" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Start Menu folder -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppShortcutFolder" Name="SimpliPDF" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="SimpliPDF" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!-- Start Menu shortcut (per-user component, HKCU keypath) -->
+    <Component Id="StartMenuShortcut" Directory="AppShortcutFolder">
+      <Shortcut Id="AppStartMenuShortcut"
+                Name="SimpliPDF"
+                Description="Merge, reorder, and edit PDF pages"
+                Target="[INSTALLFOLDER]SimpliPDF.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="SimpliPDFIcon" />
+      <RemoveFolder Id="RemoveAppShortcutFolder" Directory="AppShortcutFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\SimpliPDF" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Package>
+
+  <!-- Harvest the entire published self-contained app folder. -->
+  <Fragment>
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)\**" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>

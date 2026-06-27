@@ -10,7 +10,6 @@
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
-    <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -26,15 +25,6 @@
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
-  <!--
-    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
-    Tools extension to be activated for this project even if the Windows App SDK Nuget
-    package has not yet been restored.
-  -->
-  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <ProjectCapability Include="Msix" />
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.275">
@@ -46,15 +36,6 @@
     <PackageReference Include="PDFsharp" Version="6.2.4" />
   </ItemGroup>
 
-  <!--
-    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
-    Explorer "Package and Publish" context menu entry to be enabled for this project even if
-    the Windows App SDK Nuget package has not yet been restored.
-  -->
-  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
-  </PropertyGroup>
-
   <!-- Publish Properties -->
   <PropertyGroup>
     <!-- Native AOT is enabled for the self-contained, unpackaged Release publish on x64 and
@@ -65,15 +46,14 @@
          condition to observe it. AOT is deliberately NOT used for:
            * the inner-loop `dotnet build` (no publish profile / RID),
            * Debug,
-           * the x86 publish (win-x86 stays JIT/self-contained),
-           * the MSIX/Store package (which keeps the trimmed, framework-dependent model).
+           * the x86 publish (win-x86 stays JIT/self-contained).
          App code is AOT-clean (compiled x:Bind, source-generated MVVM / CsWin32 / IDispatch,
          no `dynamic`), and PDFsharp 6.2.4 carries [DynamicallyAccessedMembers] annotations
          throughout its reflection paths (no Reflection.Emit / MakeGenericType / DynamicMethod),
          so it trims and compiles under AOT. Building AOT requires the "Desktop development with
          C++" workload (link.exe); ARM64 additionally needs the C++ ARM64 build tools. -->
     <SimpliPdfUseAot>false</SimpliPdfUseAot>
-    <SimpliPdfUseAot Condition="'$(Configuration)' != 'Debug' and '$(WindowsPackageType)' != 'MSIX' and ('$(PublishProfile)' == 'win-x64' or '$(PublishProfile)' == 'win-arm64' or '$(RuntimeIdentifier)' == 'win-x64' or '$(RuntimeIdentifier)' == 'win-arm64')">true</SimpliPdfUseAot>
+    <SimpliPdfUseAot Condition="'$(Configuration)' != 'Debug' and ('$(PublishProfile)' == 'win-x64' or '$(PublishProfile)' == 'win-arm64' or '$(RuntimeIdentifier)' == 'win-x64' or '$(RuntimeIdentifier)' == 'win-arm64')">true</SimpliPdfUseAot>
 
     <PublishAot Condition="'$(SimpliPdfUseAot)' == 'true'">true</PublishAot>
 
@@ -83,12 +63,11 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug' and '$(SimpliPdfUseAot)' != 'true'">True</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(SimpliPdfUseAot)' == 'true'">False</PublishReadyToRun>
 
-    <!-- Trimming is required by (and implied by) Native AOT on x64/ARM64, and is also kept for
-         the MSIX/Store package. Every other configuration (inner-loop build, Debug, x86
-         self-contained) stays untrimmed. Never set this to `false` while AOT is on: native
-         compilation implies trimming and the build errors out otherwise. -->
+    <!-- Trimming is required by (and implied by) Native AOT on x64/ARM64. Every other
+         configuration (inner-loop build, Debug, x86 self-contained) stays untrimmed. Never set
+         this to `false` while AOT is on: native compilation implies trimming and the build
+         errors out otherwise. -->
     <PublishTrimmed Condition="'$(SimpliPdfUseAot)' == 'true'">true</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug' and '$(WindowsPackageType)' == 'MSIX'">true</PublishTrimmed>
     <PublishTrimmed Condition="'$(PublishTrimmed)' == ''">false</PublishTrimmed>
   </PropertyGroup>
 </Project>
