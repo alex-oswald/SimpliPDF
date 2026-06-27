@@ -75,7 +75,8 @@ public partial class MainViewModel : ObservableObject
         if (Pages.Count == 0) return;
         try
         {
-            await Task.Run(() => _pdfService.MergeAndSave(Pages.ToList(), outputPath));
+            List<PreparedPage> prepared = await PreparePagesAsync(Pages.ToList());
+            await Task.Run(() => _pdfService.MergeAndSave(prepared, outputPath));
             StatusText = $"Saved to {Path.GetFileName(outputPath)}";
         }
         catch (Exception ex)
@@ -97,13 +98,37 @@ public partial class MainViewModel : ObservableObject
             p.Rotation = (p.Rotation + 90) % 360;
     }
 
+    public async Task ApplyCropAsync(PdfPageItem page, CropRegion? crop)
+    {
+        page.Crop = crop;
+        try
+        {
+            if (crop is null)
+            {
+                page.CroppedThumbnail = null;
+                StatusText = "Crop removed";
+            }
+            else
+            {
+                page.CroppedThumbnail = await ThumbnailHelper.RenderPageAsync(
+                    page.SourceFilePath, page.OriginalPageIndex, 200u, crop, 0);
+                StatusText = "Page cropped";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error cropping: {ex.Message}";
+        }
+    }
+
     public async Task SplitToAsync(string outputFolder)
     {
         if (Pages.Count == 0) return;
         try
         {
             int count = Pages.Count;
-            await Task.Run(() => _pdfService.Split(Pages.ToList(), outputFolder));
+            List<PreparedPage> prepared = await PreparePagesAsync(Pages.ToList());
+            await Task.Run(() => _pdfService.Split(prepared, outputFolder));
             StatusText = $"Split {count} pages to {Path.GetFileName(outputFolder)}";
         }
         catch (Exception ex)
@@ -118,13 +143,35 @@ public partial class MainViewModel : ObservableObject
         if (pages.Count == 0) return;
         try
         {
-            await Task.Run(() => _pdfService.MergeAndSave(pages, outputPath));
+            List<PreparedPage> prepared = await PreparePagesAsync(pages);
+            await Task.Run(() => _pdfService.MergeAndSave(prepared, outputPath));
             StatusText = $"Extracted {pages.Count} pages to {Path.GetFileName(outputPath)}";
         }
         catch (Exception ex)
         {
             StatusText = $"Error extracting: {ex.Message}";
         }
+    }
+
+    private static async Task<List<PreparedPage>> PreparePagesAsync(IEnumerable<PdfPageItem> pages)
+    {
+        List<PreparedPage> prepared = [];
+        foreach (PdfPageItem page in pages)
+        {
+            if (page.Crop is CropRegion crop && !crop.IsFullPage)
+            {
+                (byte[] png, double widthPt, double heightPt) =
+                    await ThumbnailHelper.RenderCroppedPageToPngAsync(
+                        page.SourceFilePath, page.OriginalPageIndex, crop);
+                prepared.Add(new RasterizedPage(png, widthPt, heightPt, page.Rotation));
+            }
+            else
+            {
+                prepared.Add(new ImportedPage(
+                    page.SourceFilePath, page.OriginalPageIndex, page.Rotation));
+            }
+        }
+        return prepared;
     }
 
     private void UpdateStatus()

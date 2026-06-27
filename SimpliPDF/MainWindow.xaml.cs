@@ -100,6 +100,9 @@ public sealed partial class MainWindow : Window
         ExtractBtn.IsEnabled = hasSelection;
         DeselectBtn.IsEnabled = hasSelection;
 
+        // Crop works on exactly one page at a time
+        CropBtn.IsEnabled = selectedCount == 1;
+
         // Split needs 2+ pages
         SplitBtn.IsEnabled = pageCount >= 2;
     }
@@ -206,6 +209,25 @@ public sealed partial class MainWindow : Window
     {
         if (PagesGridView.SelectedItems.Count == 0) return;
         ViewModel.RotatePages(PagesGridView.SelectedItems);
+    }
+
+    private async void OnCropClick(object sender, RoutedEventArgs e)
+    {
+        if (PagesGridView.SelectedItems.Count != 1) return;
+        if (PagesGridView.SelectedItems[0] is not Models.PdfPageItem page) return;
+
+        try
+        {
+            CropDialog dialog = new SimpliPDF.Dialogs.CropDialog(page) { XamlRoot = Content.XamlRoot };
+            ContentDialogResult result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary) return;
+
+            await ViewModel.ApplyCropAsync(page, dialog.Result);
+        }
+        catch (Exception ex)
+        {
+            ViewModel.StatusText = $"Crop error: {ex.Message}";
+        }
     }
 
     private void OnDeselectAllClick(object sender, RoutedEventArgs e)
