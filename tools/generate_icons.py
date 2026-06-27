@@ -23,7 +23,7 @@ import io
 import os
 import struct
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 # --- Paths ------------------------------------------------------------------
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +44,11 @@ EDGE_LIGHT = (171, 179, 191) # #ABB3BF  edge stroke for light-unplated theme
 # Internal master resolution. Every concrete asset is downsampled from a master
 # of this size, so it must exceed the largest glyph we ever emit (310@400% = 1240).
 MASTER = 1536
+
+# How the "PDF" wordmark is rendered: "band" (white on the red header band),
+# "body" (bold red on the white page), or "none" (textless). Tiny sizes always
+# fall back to textless so the taskbar / title-bar icons stay crisp.
+WORDMARK = "band"
 
 # --- Low-level drawing helpers ---------------------------------------------
 
@@ -72,14 +77,56 @@ def _page(w: int, h: int, r: int, top, bottom, edge=None) -> Image.Image:
     return img
 
 
+# --- Text (the optional "PDF" wordmark) ------------------------------------
+_FONT_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
+_FONT_FILES = ("segoeuib.ttf", "seguisb.ttf", "arialbd.ttf")  # Segoe UI Bold, then fallbacks
+
+
+def _font(size: int) -> ImageFont.FreeTypeFont:
+    size = max(6, int(size))
+    if size not in _FONT_CACHE:
+        loaded = None
+        fonts_dir = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+        for name in _FONT_FILES:
+            try:
+                loaded = ImageFont.truetype(os.path.join(fonts_dir, name), size)
+                break
+            except OSError:
+                continue
+        _FONT_CACHE[size] = loaded or ImageFont.load_default()
+    return _FONT_CACHE[size]
+
+
+def _fit_font(text: str, max_w: int, max_h: int) -> ImageFont.FreeTypeFont:
+    """Largest bold font whose ``text`` fits inside ``max_w`` x ``max_h``."""
+    size = int(max_h)
+    while size > 6:
+        fnt = _font(size)
+        left, top, right, bottom = fnt.getbbox(text)
+        if (right - left) <= max_w and (bottom - top) <= max_h:
+            return fnt
+        size -= max(1, size // 16)
+    return _font(6)
+
+
+def _draw_centered(layer: Image.Image, text: str, cx: float, cy: float,
+                   font: ImageFont.FreeTypeFont, fill) -> None:
+    left, top, right, bottom = font.getbbox(text)
+    x = cx - (right - left) / 2 - left
+    y = cy - (bottom - top) / 2 - top
+    ImageDraw.Draw(layer).text((x, y), text, font=font, fill=fill)
+
+
 # --- The mark ---------------------------------------------------------------
 
-def render_master(r_px: int, pad: float, theme: str = "dark", simple: bool = False) -> Image.Image:
+def render_master(r_px: int, pad: float, theme: str = "dark", simple: bool = False,
+                  wordmark: str = "band") -> Image.Image:
     """Render the stacked-pages mark into a transparent square of ``r_px``.
 
     ``pad`` is the safe-zone fraction inset on each side. ``theme='light'`` adds a
     cool-gray edge so the white pages stay visible on a light taskbar. ``simple``
-    drops fine detail (content lines) for tiny icon sizes.
+    drops fine detail (lines / wordmark) for tiny icon sizes. ``wordmark`` selects
+    the "PDF" treatment: ``"band"``, ``"body"`` or ``"none"``.
     """
     R = r_px
     canvas = Image.new("RGBA", (R, R), (0, 0, 0, 0))
@@ -120,20 +167,41 @@ def render_master(r_px: int, pad: float, theme: str = "dark", simple: bool = Fal
     front = _page(page_w, page_h, rad, PAGE_TOP, PAGE_BOT)
     fmask = _rounded_mask(page_w, page_h, rad)
 
-    # Red header band, clipped to the page's rounded top corners.
-    band_h = int(page_h * 0.24)
+    # Red header band (hosts the optional "PDF" wordmark), clipped to the
+    # page's rounded top corners. Tiny sizes stay textless and use a slim band.
+    show_text = wordmark in ("band", "body") and not simple
+    band_h = int(page_h * (0.42 if (show_text and wordmark == "band") else 0.24))
     band = _vgrad(page_w, band_h, RED_TOP, RED_BOT)
     band_layer = Image.new("RGBA", (page_w, page_h), (0, 0, 0, 0))
     band_layer.alpha_composite(band, (0, 0))
     band_layer.putalpha(ImageChops.multiply(band_layer.getchannel("A"), fmask))
     front = Image.alpha_composite(front, band_layer)
 
-    # Content lines in the white area.
-    if not simple:
+    lx = int(page_w * 0.17)
+    lh = max(2, int(page_h * 0.045))
+
+    if show_text and wordmark == "band":
+        # White "PDF" in the band, nudged left so it clears the dog-ear corner.
+        fnt = _fit_font("PDF", int(page_w * 0.60), int(band_h * 0.50))
+        _draw_centered(front, "PDF", page_w * 0.44, band_h * 0.5, fnt, (255, 255, 255, 255))
         ld = ImageDraw.Draw(front)
-        lx = int(page_w * 0.17)
+        ly = int(band_h + (page_h - band_h) * 0.42)
+        for i, wf in enumerate((0.66, 0.48)):
+            y = ly + i * int(page_h * 0.12)
+            ld.rounded_rectangle([lx, y, lx + int(page_w * wf), y + lh], radius=lh // 2, fill=LINE + (255,))
+    elif show_text and wordmark == "body":
+        # Bold red "PDF" on the white body, with slim content lines beneath.
+        fnt = _fit_font("PDF", int(page_w * 0.74), int((page_h - band_h) * 0.40))
+        _draw_centered(front, "PDF", page_w * 0.5, band_h + (page_h - band_h) * 0.38, fnt, RED_BOT + (255,))
+        ld = ImageDraw.Draw(front)
+        ly = int(band_h + (page_h - band_h) * 0.70)
+        for i, wf in enumerate((0.58, 0.44)):
+            y = ly + i * int(page_h * 0.10)
+            ld.rounded_rectangle([lx, y, lx + int(page_w * wf), y + lh], radius=lh // 2, fill=LINE + (255,))
+    elif not simple:
+        # Textless: three content lines.
+        ld = ImageDraw.Draw(front)
         ly = int(band_h + page_h * 0.15)
-        lh = max(2, int(page_h * 0.045))
         gap = int(page_h * 0.13)
         for i, wf in enumerate((0.62, 0.74, 0.48)):
             y = ly + i * gap
@@ -189,9 +257,9 @@ _MASTERS: dict[tuple, Image.Image] = {}
 
 
 def _master(pad: float, theme: str, simple: bool) -> Image.Image:
-    key = (round(pad, 4), theme, simple)
+    key = (round(pad, 4), theme, simple, WORDMARK)
     if key not in _MASTERS:
-        _MASTERS[key] = render_master(MASTER, pad, theme, simple)
+        _MASTERS[key] = render_master(MASTER, pad, theme, simple, WORDMARK)
     return _MASTERS[key]
 
 
@@ -317,10 +385,14 @@ def build_preview(out_dir: str) -> None:
 
 
 def main() -> None:
+    global WORDMARK
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--preview", metavar="DIR", nargs="?", const=os.path.join(HERE, "_preview"),
                     help="write inspection contact sheets instead of the asset matrix")
+    ap.add_argument("--style", choices=("band", "body", "none"), default=WORDMARK,
+                    help="how to render the 'PDF' wordmark (default: %(default)s)")
     args = ap.parse_args()
+    WORDMARK = args.style
     if args.preview:
         build_preview(args.preview)
     else:
