@@ -47,7 +47,7 @@ and editing PDF pages. It targets .NET 10 on Windows 10 (1809)+ and follows the 
 .\build.ps1                                                        # arm64 Debug (inner loop)
 .\build.ps1 -Architectures x64 -Configuration Release             # x64 Release
 .\build.ps1 -Publish -Configuration Release                       # self-contained x64 + arm64
-.\build.ps1 -Architectures x64,arm64 -Configuration Release -Msix # signed MSIX packages
+.\build.ps1 -Msi -Configuration Release -Version 1.2.3            # versioned MSIs -> dist\
 ```
 
 A platform must be specified for direct `dotnet` invocations because the project defines
@@ -57,7 +57,21 @@ A platform must be specified for direct `dotnet` invocations because the project
 dotnet build SimpliPDF/SimpliPDF.csproj -c Debug -p:Platform=x64
 ```
 
-CI (`.github/workflows/`) builds signed MSIX packages for x64 and ARM64 on `windows-latest`.
+CI (`.github/workflows/`): `publish-aot.yml` validates the self-contained Native AOT build for
+x64 and ARM64 on push/PR; `release.yml` builds per-arch **MSIs** and publishes a GitHub Release on
+`vX.Y.Z` tags. Both run on `windows-latest`.
+
+## Packaging / releasing
+
+- Installers are **MSI** (WiX v6, `installer/SimpliPDF.wxs`), built from a self-contained publish —
+  **per-user** install to `%LocalAppData%\Programs\SimpliPDF`, no admin/UAC. Build locally with
+  `build.ps1 -Msi -Version <x.y.z>` (installs the `wix` global tool on demand) → `dist\`.
+- Releases are tag-driven: push `vX.Y.Z` (prerelease: `vX.Y.Z-beta1`) to run `release.yml`, which
+  builds x64 + ARM64 MSIs, generates `SHA256SUMS.txt`, and publishes a GitHub Release. A manual
+  `workflow_dispatch` run builds the MSIs as artifacts without publishing a release.
+- MSIs are signed with **Azure Trusted Signing** when the `AZURE_TRUSTED_SIGNING_*` repo variables
+  (+ the `release` / `development` environments) are configured; otherwise they build **unsigned**
+  (no secrets are committed). There is no Microsoft Store / MSIX pipeline.
 
 ## Trimming / Native AOT
 
@@ -68,7 +82,7 @@ CI (`.github/workflows/`) builds signed MSIX packages for x64 and ARM64 on `wind
   implies trimming and disables ReadyToRun. Building AOT needs the VS **"Desktop development with
   C++"** workload (`link.exe`, ARM64 also needs the C++ ARM64 build tools); the
   `Publish (Native AOT)` workflow builds it on `windows-latest`.
-- The **MSIX/Store** package keeps the framework-dependent, **trimmed** (non-AOT) model.
+- The MSI installer wraps this same self-contained (Native AOT on x64/ARM64) publish.
 - PDFsharp (6.2.4) carries `[DynamicallyAccessedMembers]` annotations across its reflection paths
   and uses no `Reflection.Emit` / `MakeGenericType` / `DynamicMethod`, so it trims and compiles
   under AOT — but empira does not officially certify AOT, so **smoke-test PDF open / merge / rotate /

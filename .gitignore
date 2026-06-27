@@ -2,6 +2,7 @@
 bin/
 obj/
 publish/
+dist/
 
 # IDE / VS
 .vs/
@@ -15,7 +16,8 @@ publish/
 **/[Pp]ackages/*
 !**/[Pp]ackages/build/
 
-# MSIX
+# Installer / packaging output
+*.msi
 *.msix
 *.appx
 AppPackages/

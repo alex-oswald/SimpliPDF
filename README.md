@@ -24,17 +24,18 @@ A lightweight WinUI 3 desktop app for merging, reordering, and editing PDF pages
 - Windows 10 (1809) or later
 - .NET 10 SDK (for building from source)
 
-## Installing from MSIX
+## Installing
 
-The MSIX packages are signed with a self-signed development certificate.
-Before installing, you need to trust the certificate once:
+Download the latest MSI for your architecture from the
+[Releases](https://github.com/alex-oswald/SimpliPDF/releases) page:
 
-1. Download `SimpliPDF_Dev.cer` from this repo (or extract it from the MSIX)
-2. Double-click it → **Install Certificate**
-3. Select **Local Machine** → **Place all certificates in the following store** → **Trusted People**
-4. Click Finish
+- **x64** — `SimpliPDF-<version>-x64.msi`
+- **ARM64** — `SimpliPDF-<version>-arm64.msi`
 
-Then double-click the `.msix` file to install.
+Double-click the `.msi` to install. SimpliPDF installs per-user (no admin prompt)
+under `%LocalAppData%\Programs\SimpliPDF` and adds a Start Menu shortcut; re-running
+the installer upgrades in place. To verify a download, check it against
+`SHA256SUMS.txt` with `Get-FileHash <file>.msi`.
 
 ## Building
 
@@ -48,8 +49,8 @@ Then double-click the `.msix` file to install.
 # Self-contained native build for x64 + arm64 (runs with no install)
 .\build.ps1 -Publish -Configuration Release
 
-# Build signed MSIX packages
-.\build.ps1 -Architectures x64,arm64 -Configuration Release -Msix
+# Build versioned MSI installers for x64 + arm64 (output: dist\)
+.\build.ps1 -Msi -Configuration Release -Version 1.2.3
 ```
 
 Or open `SimpliPDF.slnx` in Visual Studio 2022+ and press F5.
@@ -75,6 +76,25 @@ DLLs), not a single file.
 > Building the AOT targets requires the Visual Studio **"Desktop development with C++"** workload
 > (ARM64 also needs the C++ ARM64 build tools); CI builds them on `windows-latest`.
 
+### Releasing
+
+Releases are tag-driven. Pushing a `vMAJOR.MINOR.PATCH` tag runs
+[`.github/workflows/release.yml`](.github/workflows/release.yml), which builds a
+self-contained (Native AOT) MSI for x64 and ARM64 with [WiX v6](https://wixtoolset.org/),
+stamps the version from the tag, and publishes a GitHub Release with the MSIs and a
+`SHA256SUMS.txt`:
+
+```powershell
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+Prerelease tags (e.g. `v1.2.3-beta1`) publish as GitHub pre-releases. A manual
+**workflow_dispatch** run builds the MSIs as artifacts without publishing a release.
+The MSIs are signed with [Azure Trusted Signing](https://learn.microsoft.com/azure/trusted-signing/)
+when the `AZURE_TRUSTED_SIGNING_*` repository variables (and the `release` /
+`development` environments) are configured; otherwise they build unsigned.
+
 ## Tech Stack
 
 | Component | Technology |
@@ -90,9 +110,8 @@ DLLs), not a single file.
 
 ```
 SimpliPDF.slnx                 Solution
-SimpliPDF_Dev.pfx              Dev signing cert (no password)
-SimpliPDF_Dev.cer              Public cert (for trusting)
-build.ps1                      Build / publish script
+build.ps1                      Build / publish / MSI script
+installer/SimpliPDF.wxs        WiX v6 MSI installer definition
 SimpliPDF/
 ├── Models/PdfPageItem.cs       Page model
 ├── ViewModels/MainViewModel.cs MVVM view model
