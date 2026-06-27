@@ -66,7 +66,7 @@ public class PrintHelper
         {
             Image image = new Image
             {
-                Source = page.Thumbnail,
+                Source = page.DisplayThumbnail,
                 Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
                 Width = 800,
                 Height = 1100,

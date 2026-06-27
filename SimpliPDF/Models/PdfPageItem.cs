@@ -16,7 +16,21 @@ public partial class PdfPageItem : ObservableObject
     public partial int Rotation { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayThumbnail))]
     public partial BitmapImage? Thumbnail { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayThumbnail))]
+    public partial BitmapImage? CroppedThumbnail { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCrop))]
+    public partial CropRegion? Crop { get; set; }
+
+    /// <summary>The image shown on the page card — the cropped render when present.</summary>
+    public BitmapImage? DisplayThumbnail => CroppedThumbnail ?? Thumbnail;
+
+    public bool HasCrop => Crop is not null;
 
     public string DisplayLabel => $"{FileName} – p.{OriginalPageIndex + 1}";
 

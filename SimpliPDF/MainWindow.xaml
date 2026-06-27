@@ -63,6 +63,12 @@
                     <KeyboardAccelerator Modifiers="Control" Key="R" />
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
+            <AppBarButton x:Name="CropBtn" Label="Crop" Click="OnCropClick"
+                          IsEnabled="False">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE123;" />
+                </AppBarButton.Icon>
+            </AppBarButton>
             <AppBarButton x:Name="DeselectBtn" Label="Deselect All" Click="OnDeselectAllClick"
                           IsEnabled="False">
                 <AppBarButton.Icon>
@@ -132,7 +138,7 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <Image Source="{x:Bind Thumbnail, Mode=OneWay}"
+                            <Image Source="{x:Bind DisplayThumbnail, Mode=OneWay}"
                                    Stretch="Uniform"
                                    Height="{x:Bind ImageHeight, Mode=OneWay}"
                                    HorizontalAlignment="Center"
