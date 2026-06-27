@@ -22,7 +22,8 @@ internal unsafe partial interface IDispatch
     [PreserveSig] int GetTypeInfoCount(uint* pctinfo);
     [PreserveSig] int GetTypeInfo(uint iTInfo, uint lcid, void** ppTInfo);
     [PreserveSig] int GetIDsOfNames(Guid* riid, ushort** rgszNames, uint cNames, uint lcid, int* rgDispId);
-    [PreserveSig] int Invoke(
+    [PreserveSig]
+    int Invoke(
         int dispIdMember, Guid* riid, uint lcid, ushort wFlags,
         DISPPARAMS* pDispParams, ComVariant* pVarResult,
         EXCEPINFO* pExcepInfo, uint* puArgErr);
