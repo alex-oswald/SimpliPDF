@@ -17,6 +17,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -28,7 +29,7 @@
             </TitleBar.IconSource>
         </TitleBar>
 
-        <!-- Command Bar -->
+        <!-- Command Bar — global document actions -->
         <CommandBar Grid.Row="1" DefaultLabelPosition="Right" IsOpen="False">
             <AppBarButton Icon="OpenFile" Label="Open" Click="OnOpenClick"
                           KeyboardAcceleratorTextOverride="Ctrl+O">
@@ -48,44 +49,10 @@
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
             <AppBarSeparator />
-            <AppBarButton x:Name="DeleteBtn" Icon="Delete" Label="Delete" Click="OnDeleteClick"
-                          IsEnabled="False" KeyboardAcceleratorTextOverride="Del">
-                <AppBarButton.KeyboardAccelerators>
-                    <KeyboardAccelerator Key="Delete" />
-                </AppBarButton.KeyboardAccelerators>
-            </AppBarButton>
-            <AppBarButton x:Name="RotateBtn" Label="Rotate" Click="OnRotateClick"
-                          IsEnabled="False" KeyboardAcceleratorTextOverride="Ctrl+R">
-                <AppBarButton.Icon>
-                    <FontIcon Glyph="&#xE7AD;" />
-                </AppBarButton.Icon>
-                <AppBarButton.KeyboardAccelerators>
-                    <KeyboardAccelerator Modifiers="Control" Key="R" />
-                </AppBarButton.KeyboardAccelerators>
-            </AppBarButton>
-            <AppBarButton x:Name="CropBtn" Label="Crop" Click="OnCropClick"
-                          IsEnabled="False">
-                <AppBarButton.Icon>
-                    <FontIcon Glyph="&#xE123;" />
-                </AppBarButton.Icon>
-            </AppBarButton>
-            <AppBarButton x:Name="DeselectBtn" Label="Deselect All" Click="OnDeselectAllClick"
-                          IsEnabled="False">
-                <AppBarButton.Icon>
-                    <FontIcon Glyph="&#xE8E6;" />
-                </AppBarButton.Icon>
-            </AppBarButton>
-            <AppBarSeparator />
             <AppBarButton x:Name="SplitBtn" Label="Split All" Click="OnSplitClick"
                           IsEnabled="False">
                 <AppBarButton.Icon>
                     <FontIcon Glyph="&#xE8A9;" />
-                </AppBarButton.Icon>
-            </AppBarButton>
-            <AppBarButton x:Name="ExtractBtn" Label="Save Page" Click="OnExtractClick"
-                          IsEnabled="False">
-                <AppBarButton.Icon>
-                    <FontIcon Glyph="&#xE8B5;" />
                 </AppBarButton.Icon>
             </AppBarButton>
             <AppBarButton x:Name="SaveBtn" Icon="Save" Label="Save Merged" Click="OnSaveClick"
@@ -96,8 +63,63 @@
             </AppBarButton>
         </CommandBar>
 
+        <!-- Contextual selection toolbar — appears above the grid when pages are selected -->
+        <CommandBar x:Name="SelectionBar" Grid.Row="2" DefaultLabelPosition="Right" IsOpen="False"
+                    Visibility="Collapsed"
+                    Background="{ThemeResource SolidBackgroundFillColorSecondaryBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="0,1,0,1">
+            <CommandBar.Content>
+                <TextBlock x:Name="SelectionCountText"
+                           Margin="16,0,0,0"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+            </CommandBar.Content>
+            <AppBarButton x:Name="RotateBtn" Label="Rotate" Click="OnRotateClick"
+                          KeyboardAcceleratorTextOverride="Ctrl+R">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE7AD;" />
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control" Key="R" />
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+            <AppBarButton x:Name="DuplicateBtn" Label="Duplicate" Click="OnDuplicateClick"
+                          KeyboardAcceleratorTextOverride="Ctrl+D">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE8C8;" />
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control" Key="D" />
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+            <AppBarButton x:Name="CropBtn" Label="Crop" Click="OnCropClick"
+                          IsEnabled="False">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE123;" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton x:Name="ExtractBtn" Label="Save Page" Click="OnExtractClick">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE8B5;" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarSeparator />
+            <AppBarButton x:Name="DeleteBtn" Icon="Delete" Label="Delete" Click="OnDeleteClick"
+                          KeyboardAcceleratorTextOverride="Del">
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Key="Delete" />
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+            <AppBarButton x:Name="DeselectBtn" Label="Deselect All" Click="OnDeselectAllClick">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE8E6;" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+        </CommandBar>
+
         <!-- Main content area — this is the drop target -->
-        <Grid Grid.Row="2"
+        <Grid Grid.Row="3"
               AllowDrop="True"
               DragOver="OnDragOver"
               Drop="OnDrop"
@@ -163,7 +185,7 @@
         </Grid>
 
         <!-- Status Bar -->
-        <Border Grid.Row="3"
+        <Border Grid.Row="4"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="0,1,0,0"

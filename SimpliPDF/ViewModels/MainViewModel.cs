@@ -98,6 +98,21 @@ public partial class MainViewModel : ObservableObject
             p.Rotation = (p.Rotation + 90) % 360;
     }
 
+    public void DuplicatePages(IList<object> selectedItems)
+    {
+        List<PdfPageItem> selected = selectedItems.OfType<PdfPageItem>().ToList();
+        if (selected.Count == 0) return;
+
+        // Insert each duplicate directly after its original. Re-resolving the index on every
+        // iteration keeps positions correct as earlier inserts shift later originals down.
+        foreach (PdfPageItem page in selected.OrderBy(Pages.IndexOf))
+        {
+            int index = Pages.IndexOf(page);
+            if (index < 0) continue;
+            Pages.Insert(index + 1, page.Clone());
+        }
+    }
+
     public async Task ApplyCropAsync(PdfPageItem page, CropRegion? crop)
     {
         page.Crop = crop;
