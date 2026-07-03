@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:SimpliPDF.Controls"
+    xmlns:services="using:SimpliPDF.Services"
     Title="Scan"
     PrimaryButtonText="Scan"
     CloseButtonText="Cancel"
@@ -25,8 +26,13 @@
                       Header="Scanner"
                       HorizontalAlignment="Stretch"
                       PlaceholderText="Searching for scanners..."
-                      SelectionChanged="OnScannerSelectionChanged"
-                      DisplayMemberPath="Name" />
+                      SelectionChanged="OnScannerSelectionChanged">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="services:ScannerInfo">
+                        <TextBlock Text="{x:Bind Name}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
 
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>

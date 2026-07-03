@@ -17,7 +17,7 @@ A lightweight WinUI 3 desktop app for merging, reordering, and editing PDF pages
 
 ## Screenshot
 
-![SimpliPDF](https://github.com/user-attachments/assets/placeholder.png)
+![SimpliPDF – merge, reorder, and edit PDF pages](docs/screenshot.png)
 
 ## Requirements
 
