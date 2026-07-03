@@ -184,7 +184,7 @@ public sealed partial class ScanDialog : ContentDialog
                 : new ScanCropRegion(region.Left, region.Top, region.Right, region.Bottom);
 
             string? pdfPath = await ScanService.ScanAsync(
-                SelectedScanner.DeviceId, SelectedDpi, SelectedColorMode, scanCrop);
+                SelectedScanner.DeviceId, SelectedDpi, SelectedColorMode, scanCrop, token);
 
             // Reaching here means the WIA transfer has returned – i.e. the scanner has finished and
             // its bar is back at the start. Only now is it honest to resolve the cancelled state.

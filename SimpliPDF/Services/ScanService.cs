@@ -278,99 +278,129 @@ public static class ScanService
     }
 
     /// <summary>
-    /// Full-resolution scan, returns path to a temp PDF.
-    /// When a crop region is provided, only the selected area is scanned.
+    /// Full-resolution scan, returns the path to a temp PDF, or <see langword="null"/> if cancelled.
+    /// When a crop region is provided, only the selected area is scanned. The scan runs through the
+    /// low-level WIA transfer (<see cref="WiaScanner"/>) so it can be cancelled mid-pass; if that
+    /// path fails on a particular driver it falls back to the automation transfer, which works
+    /// everywhere but cannot be interrupted until the scanner finishes the pass.
     /// </summary>
-    public static Task<string?> ScanAsync(string deviceId, int dpi, ScanColorMode colorMode, ScanCropRegion? crop = null)
+    public static Task<string?> ScanAsync(string deviceId, int dpi, ScanColorMode colorMode,
+        ScanCropRegion? crop = null, CancellationToken cancellationToken = default)
     {
-        return RunOnStaThread(() =>
+        return RunOnStaThread<string?>(() =>
         {
-            DispatchObject? device = ConnectDevice(deviceId);
-            if (device == null)
-                throw new InvalidOperationException("Scanner not found. It may have been disconnected.");
+            (double left, double top, double right, double bottom)? cropTuple =
+                crop is null ? null : (crop.Left, crop.Top, crop.Right, crop.Bottom);
 
-            DispatchObject? scanItem = FirstItem(device);
-            DispatchObject? props = scanItem?.GetObject("Properties");
-            if (scanItem == null || props == null)
-                throw new InvalidOperationException("Scanner not found. It may have been disconnected.");
-
-            TrySetProperty(props, 6147, dpi);
-            TrySetProperty(props, 6148, dpi);
-            TrySetProperty(props, 6146, (int)colorMode);
-
-            // WIA item properties frequently persist across connections, so a previous (cropped)
-            // scan's position/extent can leak into this one. Re-establish a full-bed baseline at the
-            // current DPI first; otherwise each successive crop is measured against the last crop's
-            // shrunken, offset area and the selection appears to grow and drift left/down.
-            ResetScanAreaToFullBed(props);
-
-            // Apply crop region via WIA extent properties
-            if (crop != null)
-            {
-                // Read the full scan area at the current DPI (now guaranteed to be the whole bed).
-                int fullWidth = TryGetPropertyValue(props, 6151);
-                int fullHeight = TryGetPropertyValue(props, 6152);
-
-                // Fallback: estimate from standard letter size at selected DPI
-                if (fullWidth <= 0) fullWidth = (int)(8.5 * dpi);
-                if (fullHeight <= 0) fullHeight = (int)(11.0 * dpi);
-
-                int xPos = (int)(crop.Left * fullWidth);
-                int yPos = (int)(crop.Top * fullHeight);
-                int xExtent = Math.Max(1, (int)((crop.Right - crop.Left) * fullWidth));
-                int yExtent = Math.Max(1, (int)((crop.Bottom - crop.Top) * fullHeight));
-
-                // Clamp so position + extent doesn't exceed full size
-                if (xPos + xExtent > fullWidth) xExtent = fullWidth - xPos;
-                if (yPos + yExtent > fullHeight) yExtent = fullHeight - yPos;
-
-                // Reset position to origin first so shrinking extent can't fail
-                TrySetProperty(props, 6149, 0);
-                TrySetProperty(props, 6150, 0);
-                // Set desired extent
-                TrySetProperty(props, 6151, xExtent);
-                TrySetProperty(props, 6152, yExtent);
-                // Set desired position
-                TrySetProperty(props, 6149, xPos);
-                TrySetProperty(props, 6150, yPos);
-            }
-
-            DispatchObject? image;
+            string? imagePath;
             try
             {
-                image = scanItem.Call("Transfer", WiaFormatBmp);
+                imagePath = WiaScanner.ScanToBmp(
+                    deviceId, dpi, (int)colorMode, cropTuple, ScratchFolder, cancellationToken);
             }
-            catch (COMException ex) when (ex.HResult == unchecked((int)0x80210006))
+            catch when (!cancellationToken.IsCancellationRequested)
             {
-                return null;
-            }
-            if (image == null) return null;
-
-            string imagePath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.bmp");
-            image.Call("SaveFile", imagePath);
-
-            string pdfPath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.pdf");
-            try
-            {
-                using PdfDocument doc = new PdfDocument();
-                PdfPage page = doc.AddPage();
-
-                using XImage xImage = XImage.FromFile(imagePath);
-                page.Width = XUnit.FromPoint(xImage.PointWidth);
-                page.Height = XUnit.FromPoint(xImage.PointHeight);
-
-                using XGraphics gfx = XGraphics.FromPdfPage(page);
-                gfx.DrawImage(xImage, 0, 0, page.Width.Point, page.Height.Point);
-
-                doc.Save(pdfPath);
-            }
-            finally
-            {
-                try { File.Delete(imagePath); } catch { }
+                // Low-level cancellable transfer isn't available on this driver — fall back to the
+                // automation transfer so scanning still works (just without mid-pass cancellation).
+                imagePath = ScanViaAutomation(deviceId, dpi, colorMode, crop);
             }
 
-            return (string?)pdfPath;
+            if (imagePath == null) return null; // cancelled, or nothing was scanned
+
+            try { return BuildPdfFromBmp(imagePath); }
+            finally { try { File.Delete(imagePath); } catch { } }
         });
+    }
+
+    /// <summary>
+    /// Automation-based (wiaaut) full-resolution transfer to a temp BMP, returning its path (or
+    /// <see langword="null"/>). Used only as a fallback for drivers where the low-level cancellable
+    /// transfer fails; unlike that path it cannot be cancelled once <c>Transfer</c> is underway.
+    /// </summary>
+    private static string? ScanViaAutomation(string deviceId, int dpi, ScanColorMode colorMode, ScanCropRegion? crop)
+    {
+        DispatchObject? device = ConnectDevice(deviceId);
+        if (device == null)
+            throw new InvalidOperationException("Scanner not found. It may have been disconnected.");
+
+        DispatchObject? scanItem = FirstItem(device);
+        DispatchObject? props = scanItem?.GetObject("Properties");
+        if (scanItem == null || props == null)
+            throw new InvalidOperationException("Scanner not found. It may have been disconnected.");
+
+        TrySetProperty(props, 6147, dpi);
+        TrySetProperty(props, 6148, dpi);
+        TrySetProperty(props, 6146, (int)colorMode);
+
+        // WIA item properties frequently persist across connections, so a previous (cropped)
+        // scan's position/extent can leak into this one. Re-establish a full-bed baseline at the
+        // current DPI first; otherwise each successive crop is measured against the last crop's
+        // shrunken, offset area and the selection appears to grow and drift left/down.
+        ResetScanAreaToFullBed(props);
+
+        // Apply crop region via WIA extent properties
+        if (crop != null)
+        {
+            // Read the full scan area at the current DPI (now guaranteed to be the whole bed).
+            int fullWidth = TryGetPropertyValue(props, 6151);
+            int fullHeight = TryGetPropertyValue(props, 6152);
+
+            // Fallback: estimate from standard letter size at selected DPI
+            if (fullWidth <= 0) fullWidth = (int)(8.5 * dpi);
+            if (fullHeight <= 0) fullHeight = (int)(11.0 * dpi);
+
+            int xPos = (int)(crop.Left * fullWidth);
+            int yPos = (int)(crop.Top * fullHeight);
+            int xExtent = Math.Max(1, (int)((crop.Right - crop.Left) * fullWidth));
+            int yExtent = Math.Max(1, (int)((crop.Bottom - crop.Top) * fullHeight));
+
+            // Clamp so position + extent doesn't exceed full size
+            if (xPos + xExtent > fullWidth) xExtent = fullWidth - xPos;
+            if (yPos + yExtent > fullHeight) yExtent = fullHeight - yPos;
+
+            // Reset position to origin first so shrinking extent can't fail
+            TrySetProperty(props, 6149, 0);
+            TrySetProperty(props, 6150, 0);
+            // Set desired extent
+            TrySetProperty(props, 6151, xExtent);
+            TrySetProperty(props, 6152, yExtent);
+            // Set desired position
+            TrySetProperty(props, 6149, xPos);
+            TrySetProperty(props, 6150, yPos);
+        }
+
+        DispatchObject? image;
+        try
+        {
+            image = scanItem.Call("Transfer", WiaFormatBmp);
+        }
+        catch (COMException ex) when (ex.HResult == unchecked((int)0x80210006))
+        {
+            return null;
+        }
+        if (image == null) return null;
+
+        string imagePath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.bmp");
+        image.Call("SaveFile", imagePath);
+        return imagePath;
+    }
+
+    /// <summary>Wraps a scanned BMP into a single-page PDF and returns the temp PDF path.</summary>
+    private static string BuildPdfFromBmp(string imagePath)
+    {
+        string pdfPath = Path.Combine(ScratchFolder, $"scan_{Guid.NewGuid():N}.pdf");
+        using PdfDocument doc = new PdfDocument();
+        PdfPage page = doc.AddPage();
+
+        using XImage xImage = XImage.FromFile(imagePath);
+        page.Width = XUnit.FromPoint(xImage.PointWidth);
+        page.Height = XUnit.FromPoint(xImage.PointHeight);
+
+        using XGraphics gfx = XGraphics.FromPdfPage(page);
+        gfx.DrawImage(xImage, 0, 0, page.Width.Point, page.Height.Point);
+
+        doc.Save(pdfPath);
+        return pdfPath;
     }
 
     private static DispatchObject? ConnectDevice(string deviceId)
