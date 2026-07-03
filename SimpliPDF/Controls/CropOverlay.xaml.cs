@@ -20,6 +20,9 @@ public sealed partial class CropOverlay : UserControl
     private Point _dragStart;
     private CropRegion? _cropRegion;
 
+    private readonly Dictionary<InputSystemCursorShape, InputCursor> _cursorCache = [];
+    private InputSystemCursorShape? _currentCursor;
+
     [Flags]
     private enum DragEdge { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
     private enum DragMode { None, Resize, Create }
@@ -145,10 +148,39 @@ public sealed partial class CropOverlay : UserControl
         _ => InputSystemCursorShape.Cross,
     };
 
+    /// <summary>
+    /// Shows the system cursor for <paramref name="shape"/> over the overlay. The cursor is set on
+    /// this <see cref="UserControl"/> via <see cref="UIElement.ProtectedCursor"/> (only settable
+    /// from a derived type) rather than on a <see cref="Canvas"/> subclass. A code-only custom XAML
+    /// control that derives from a framework type crashes the layout pass under Native AOT
+    /// (InvalidCastException in MeasureOverride), whereas this XAML-backed control is AOT-safe.
+    /// Because the child canvas sets no cursor of its own, this cursor applies across the overlay.
+    /// Created cursors are cached and reused.
+    /// </summary>
+    private void SetCursorShape(InputSystemCursorShape shape)
+    {
+        if (_currentCursor == shape) return;
+        _currentCursor = shape;
+
+        if (!_cursorCache.TryGetValue(shape, out InputCursor? cursor))
+        {
+            cursor = InputSystemCursor.Create(shape);
+            _cursorCache[shape] = cursor;
+        }
+        ProtectedCursor = cursor;
+    }
+
+    /// <summary>Restores the default cursor.</summary>
+    private void ResetCursor()
+    {
+        _currentCursor = null;
+        ProtectedCursor = null;
+    }
+
     private void OnCropPointerExited(object sender, PointerRoutedEventArgs e)
     {
         if (_dragMode == DragMode.None)
-            CropCanvas.ResetCursor();
+            ResetCursor();
     }
 
     private void OnCropPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -162,12 +194,12 @@ public sealed partial class CropOverlay : UserControl
         if (_dragEdges != DragEdge.None)
         {
             _dragMode = DragMode.Resize;
-            CropCanvas.SetCursorShape(CursorForEdges(_dragEdges));
+            SetCursorShape(CursorForEdges(_dragEdges));
         }
         else
         {
             _dragMode = DragMode.Create;
-            CropCanvas.SetCursorShape(InputSystemCursorShape.Cross);
+            SetCursorShape(InputSystemCursorShape.Cross);
             _dragStart = pos;
             Canvas.SetLeft(CropRect, pos.X);
             Canvas.SetTop(CropRect, pos.Y);
@@ -184,7 +216,7 @@ public sealed partial class CropOverlay : UserControl
         if (_dragMode == DragMode.None)
         {
             if (PreviewImage.Source is not null)
-                CropCanvas.SetCursorShape(CursorForEdges(HitTestEdges(pos)));
+                SetCursorShape(CursorForEdges(HitTestEdges(pos)));
             return;
         }
 
