@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 using Windows.Win32;
-using Windows.Win32.Foundation;
 using Windows.Win32.System.Com;
 
 namespace SimpliPDF.Interop;
@@ -77,9 +76,6 @@ internal sealed unsafe class DispatchObject
     private const uint LOCALE_USER_DEFAULT = 0x0400;
     private const int DISP_E_EXCEPTION = unchecked((int)0x80020009);
 
-    private static readonly Guid IID_IDispatch = new("00020400-0000-0000-c000-000000000046");
-    private static readonly StrategyBasedComWrappers s_comWrappers = new();
-
     private readonly IDispatch _disp;
 
     private DispatchObject(IDispatch disp) => _disp = disp;
@@ -90,26 +86,12 @@ internal sealed unsafe class DispatchObject
         if (PInvoke.CLSIDFromProgID(progId, out Guid clsid).Failed)
             return null;
 
-        Guid iid = IID_IDispatch;
-        HRESULT hr = PInvoke.CoCreateInstance(
-            in clsid, null, CLSCTX.CLSCTX_INPROC_SERVER | CLSCTX.CLSCTX_LOCAL_SERVER, in iid, out object ppv);
-        if (hr.Failed || ppv is null)
-            return null;
-
-        // CsWin32's CoCreateInstance hands back a classic COM RCW (allowMarshaling: true).
-        // Bridge that to a source-generated wrapper via the underlying IUnknown so the rest
-        // of the late binding stays on the AOT-safe ComWrappers path.
-        nint pUnk = Marshal.GetIUnknownForObject(ppv);
-        try
-        {
-            IDispatch disp = (IDispatch)s_comWrappers.GetOrCreateObjectForComInstance(pUnk, CreateObjectFlags.None);
-            return new DispatchObject(disp);
-        }
-        finally
-        {
-            Marshal.Release(pUnk);
-            Marshal.ReleaseComObject(ppv);
-        }
+        // Activate on the AOT-safe ComWrappers path (see ComInterop.CoCreate): a raw IUnknown* is
+        // wrapped and cast to our [GeneratedComInterface] IDispatch via IDynamicInterfaceCastable, so
+        // no built-in COM marshaller is touched.
+        IDispatch? disp = ComInterop.CoCreate<IDispatch>(
+            in clsid, (uint)(CLSCTX.CLSCTX_INPROC_SERVER | CLSCTX.CLSCTX_LOCAL_SERVER));
+        return disp is not null ? new DispatchObject(disp) : null;
     }
 
     public int GetInt(string name)
@@ -196,7 +178,7 @@ internal sealed unsafe class DispatchObject
         nint p = v.GetRawDataRef<nint>();
         if (p == 0) return null;
 
-        IEnumVARIANT en = (IEnumVARIANT)s_comWrappers.GetOrCreateObjectForComInstance(p, CreateObjectFlags.None);
+        IEnumVARIANT en = (IEnumVARIANT)ComInterop.Wrappers.GetOrCreateObjectForComInstance(p, CreateObjectFlags.None);
         return new EnumVariant(en);
     }
 
@@ -264,7 +246,7 @@ internal sealed unsafe class DispatchObject
         nint p = v.GetRawDataRef<nint>();
         if (p == 0) return null;
 
-        IDispatch disp = (IDispatch)s_comWrappers.GetOrCreateObjectForComInstance(p, CreateObjectFlags.None);
+        IDispatch disp = (IDispatch)ComInterop.Wrappers.GetOrCreateObjectForComInstance(p, CreateObjectFlags.None);
         return new DispatchObject(disp);
     }
 

@@ -1,12 +1,9 @@
-CoCreateInstance
+CLSCTX
 CLSIDFromProgID
-IFileOpenDialog
-IFileSaveDialog
-IShellItem
-IShellItemArray
 FILEOPENDIALOGOPTIONS
 SIGDN
 COMDLG_FILTERSPEC
+PCWSTR
 SetWindowSubclass
 DefSubclassProc
 RemoveWindowSubclass

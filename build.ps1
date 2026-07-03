@@ -26,6 +26,15 @@
     the MSI, does not support x86). WiX v6 (`wix` global tool) is installed on
     demand if missing.
 
+.PARAMETER ComSmokeTest
+    If set, publishes and runs the standalone COM smoke test (tools\ComSmokeTest)
+    for the host architecture, then exits. It activates the two COM paths that
+    break under Native AOT (the Win32 file dialogs and the WIA scanner) and exits
+    non-zero if either fails. Release publishes the harness with Native AOT — the
+    exact runtime that shipped — so it needs the "Desktop development with C++"
+    workload; Debug runs the same code under JIT (no C++ toolchain required), which
+    exercises the identical ComWrappers activation path. Ignores the other switches.
+
 .PARAMETER Version
     Version stamped into the published binaries and the MSI (e.g. 1.2.3). A
     leading 'v' is stripped. Defaults to 0.0.0.
@@ -35,6 +44,8 @@
     .\build.ps1 -Configuration Release                      # Build arm64 Release
     .\build.ps1 -Publish -Configuration Release             # Self-contained x64 + arm64
     .\build.ps1 -Msi -Configuration Release -Version 1.2.3  # Versioned MSIs for x64 + arm64
+    .\build.ps1 -ComSmokeTest                               # Run the COM smoke test (JIT)
+    .\build.ps1 -ComSmokeTest -Configuration Release        # Run the COM smoke test (Native AOT)
 #>
 param(
     [ValidateSet("x64", "x86", "arm64")]
@@ -45,6 +56,7 @@ param(
 
     [switch]$Publish,
     [switch]$Msi,
+    [switch]$ComSmokeTest,
 
     [string]$Version = "0.0.0"
 )
@@ -53,6 +65,40 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $project = Join-Path $root "SimpliPDF\SimpliPDF.csproj"
 $tfm = "net10.0-windows10.0.26100.0"
+
+# -ComSmokeTest is a standalone action: publish the headless COM harness for the host
+# architecture and run it, surfacing any Native-AOT COM/marshalling regression as a non-zero
+# exit code. It reproduces the shipped runtime (Native AOT in Release) without launching the UI.
+if ($ComSmokeTest) {
+    $smokeProject = Join-Path $root "tools\ComSmokeTest\ComSmokeTest.csproj"
+    $osArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+    $smokeArch = switch ($osArch) {
+        "x64" { "x64" }
+        "arm64" { "arm64" }
+        default { Write-Error "COM smoke test supports x64 / arm64 hosts only (detected '$osArch')."; exit 1 }
+    }
+    $rid = "win-$smokeArch"
+    $mode = if ($Configuration -eq "Debug") { "JIT" } else { "Native AOT" }
+
+    Write-Host "`n=== COM smoke test | $Configuration ($mode) | $smokeArch ===" -ForegroundColor Cyan
+
+    dotnet publish $smokeProject -c $Configuration -r $rid
+    if ($LASTEXITCODE -ne 0) { Write-Error "COM smoke test publish failed"; exit $LASTEXITCODE }
+
+    $exe = Join-Path $root "tools\ComSmokeTest\bin\$Configuration\$tfm\$rid\publish\ComSmokeTest.exe"
+    if (-not (Test-Path $exe)) { Write-Error "Harness executable not found: $exe"; exit 1 }
+
+    Write-Host "Running $exe`n" -ForegroundColor Cyan
+    & $exe
+    $code = $LASTEXITCODE
+    if ($code -eq 0) {
+        Write-Host "`nOK  COM smoke test passed ($mode, $smokeArch)" -ForegroundColor Green
+    }
+    else {
+        Write-Error "COM smoke test FAILED ($mode, $smokeArch) with exit code $code"
+    }
+    exit $code
+}
 
 # Normalize the version: strip a leading 'v' and derive a numeric major.minor.patch
 # for the MSI ProductVersion / AssemblyVersion / FileVersion (which must be numeric).
