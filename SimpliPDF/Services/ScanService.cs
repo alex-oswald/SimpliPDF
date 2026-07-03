@@ -83,7 +83,7 @@ public static class ScanService
                 }
                 catch { }
             }
-            return result;
+            return Deduplicate(result);
         });
 
         // Kick off capabilities queries for all found scanners
@@ -92,6 +92,32 @@ public static class ScanService
 
         return scanners;
     }
+
+    /// <summary>
+    /// A single physical scanner is frequently registered more than once under the same name
+    /// via different transports (e.g. eSCL over USB as <c>SWD\EsclUsb\…</c> and eSCL over the
+    /// network as <c>SWD\Escl\…</c>), which makes one device appear multiple times. Collapse
+    /// entries that share a display name, preferring a USB connection when available since it
+    /// does not depend on network availability.
+    /// </summary>
+    private static List<ScannerInfo> Deduplicate(List<ScannerInfo> scanners)
+    {
+        List<ScannerInfo> deduped = [];
+        foreach (ScannerInfo scanner in scanners)
+        {
+            int existing = deduped.FindIndex(s =>
+                string.Equals(s.Name, scanner.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (existing < 0)
+                deduped.Add(scanner);
+            else if (IsUsbDevice(scanner.DeviceId) && !IsUsbDevice(deduped[existing].DeviceId))
+                deduped[existing] = scanner;
+        }
+        return deduped;
+    }
+
+    private static bool IsUsbDevice(string deviceId) =>
+        deviceId.Contains("Usb", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Invalidate the cache so the next call re-queries devices.</summary>
     public static void InvalidateCache()
