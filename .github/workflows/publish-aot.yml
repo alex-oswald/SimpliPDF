@@ -64,6 +64,17 @@ jobs:
           }
           Write-Host "Verified: Native AOT output."
 
+      # Actually RUN a Native AOT binary and exercise the COM paths that silently broke before
+      # (Win32 file dialogs + WIA scanner). Publishing alone never caught the failure because the
+      # app was never launched. The x64 runner can execute the x64 native harness; the arm64 leg is
+      # skipped because a native arm64 binary can't run on the x64 runner. build.ps1 -ComSmokeTest
+      # detects the host arch (x64 here), AOT-publishes tools/ComSmokeTest, runs it, and exits
+      # non-zero on any ComWrappers/marshalling failure.
+      - name: Run COM smoke test (Native AOT)
+        if: matrix.platform == 'x64'
+        shell: pwsh
+        run: .\build.ps1 -ComSmokeTest -Configuration Release
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
