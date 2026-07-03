@@ -37,4 +37,17 @@ public partial class PdfPageItem : ObservableObject
     public bool IsLandscape => Rotation % 180 != 0;
     public double CardWidth => IsLandscape ? 200 : 150;
     public double ImageHeight => IsLandscape ? 130 : 180;
+
+    /// <summary>Creates an independent copy that renders the same source page, preserving the
+    /// user's rotation and crop. Thumbnails are shared so the duplicate appears immediately.</summary>
+    public PdfPageItem Clone() => new()
+    {
+        SourceFilePath = SourceFilePath,
+        OriginalPageIndex = OriginalPageIndex,
+        FileName = FileName,
+        Rotation = Rotation,
+        Thumbnail = Thumbnail,
+        CroppedThumbnail = CroppedThumbnail,
+        Crop = Crop,
+    };
 }

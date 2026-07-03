@@ -90,21 +90,19 @@ public sealed partial class MainWindow : Window
         // Empty state
         EmptyState.Visibility = hasPages ? Visibility.Collapsed : Visibility.Visible;
 
-        // Buttons that need pages
+        // Global document actions
         SaveBtn.IsEnabled = hasPages;
         PrintBtn.IsEnabled = hasPages;
 
-        // Buttons that need selection
-        DeleteBtn.IsEnabled = hasSelection;
-        RotateBtn.IsEnabled = hasSelection;
-        ExtractBtn.IsEnabled = hasSelection;
-        DeselectBtn.IsEnabled = hasSelection;
+        // Split needs 2+ pages
+        SplitBtn.IsEnabled = pageCount >= 2;
+
+        // Contextual selection toolbar — appears only when pages are selected
+        SelectionBar.Visibility = hasSelection ? Visibility.Visible : Visibility.Collapsed;
+        SelectionCountText.Text = $"{selectedCount} selected";
 
         // Crop works on exactly one page at a time
         CropBtn.IsEnabled = selectedCount == 1;
-
-        // Split needs 2+ pages
-        SplitBtn.IsEnabled = pageCount >= 2;
     }
 
     // --- File operations using Win32 dialogs ---
@@ -209,6 +207,12 @@ public sealed partial class MainWindow : Window
     {
         if (PagesGridView.SelectedItems.Count == 0) return;
         ViewModel.RotatePages(PagesGridView.SelectedItems);
+    }
+
+    private void OnDuplicateClick(object sender, RoutedEventArgs e)
+    {
+        if (PagesGridView.SelectedItems.Count == 0) return;
+        ViewModel.DuplicatePages(PagesGridView.SelectedItems);
     }
 
     private async void OnCropClick(object sender, RoutedEventArgs e)
