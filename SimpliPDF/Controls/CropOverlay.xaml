@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:SimpliPDF.Controls"
     mc:Ignorable="d">
 
     <Grid>
@@ -12,13 +13,14 @@
         <Image x:Name="PreviewImage" Stretch="Uniform" />
 
         <!-- Crop overlay canvas -->
-        <Canvas x:Name="CropCanvas"
+        <local:CursorCanvas x:Name="CropCanvas"
                 Background="Transparent"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
                 PointerPressed="OnCropPointerPressed"
                 PointerMoved="OnCropPointerMoved"
-                PointerReleased="OnCropPointerReleased">
+                PointerReleased="OnCropPointerReleased"
+                PointerExited="OnCropPointerExited">
             <Rectangle x:Name="DimTop" Fill="#40000000" />
             <Rectangle x:Name="DimBottom" Fill="#40000000" />
             <Rectangle x:Name="DimLeft" Fill="#40000000" />
@@ -38,6 +40,6 @@
             <Rectangle x:Name="HandleBL" Width="10" Height="10" Fill="White" Visibility="Collapsed" />
             <Rectangle x:Name="HandleB"  Width="10" Height="10" Fill="White" Visibility="Collapsed" />
             <Rectangle x:Name="HandleBR" Width="10" Height="10" Fill="White" Visibility="Collapsed" />
-        </Canvas>
+        </local:CursorCanvas>
     </Grid>
 </UserControl>
