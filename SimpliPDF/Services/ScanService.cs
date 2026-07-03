@@ -298,10 +298,16 @@ public static class ScanService
             TrySetProperty(props, 6148, dpi);
             TrySetProperty(props, 6146, (int)colorMode);
 
+            // WIA item properties frequently persist across connections, so a previous (cropped)
+            // scan's position/extent can leak into this one. Re-establish a full-bed baseline at the
+            // current DPI first; otherwise each successive crop is measured against the last crop's
+            // shrunken, offset area and the selection appears to grow and drift left/down.
+            ResetScanAreaToFullBed(props);
+
             // Apply crop region via WIA extent properties
             if (crop != null)
             {
-                // Read the full scan area at the current DPI
+                // Read the full scan area at the current DPI (now guaranteed to be the whole bed).
                 int fullWidth = TryGetPropertyValue(props, 6151);
                 int fullHeight = TryGetPropertyValue(props, 6152);
 
@@ -433,6 +439,56 @@ public static class ScanService
         catch { return 0; }
     }
 
+    /// <summary>Reads the maximum valid value of a WIA property (its range max, or the largest
+    /// listed value), or 0 when it cannot be determined.</summary>
+    private static int TryGetPropertyMax(DispatchObject properties, int propertyId)
+    {
+        try
+        {
+            DispatchObject? prop = FindProperty(properties, propertyId);
+            if (prop == null) return 0;
+
+            int subType = prop.GetInt("SubType");
+            if (subType == 2) // WiaSubType.wiaSubTypeRange
+                return prop.GetInt("SubTypeMax");
+
+            if (subType == 1) // WiaSubType.wiaSubTypeList
+            {
+                DispatchObject? subValues = prop.GetObject("SubTypeValues");
+                if (subValues != null)
+                {
+                    int max = 0;
+                    foreach (int value in subValues.EnumerateInts())
+                        if (value > max) max = value;
+                    return max;
+                }
+            }
+        }
+        catch { }
+        return 0;
+    }
+
+    /// <summary>
+    /// Restores the scan item to cover the whole scanner bed at the current resolution. WIA drivers
+    /// frequently keep item properties for the lifetime of the process, so without this a prior
+    /// crop's position and extent survive into the next scan and each successive crop is measured
+    /// against the previous (already shrunk) area — the selection appears to grow and drift. Zeroing
+    /// the origin and pushing the extent back out to its maximum gives every scan the same clean
+    /// full-bed starting point.
+    /// </summary>
+    private static void ResetScanAreaToFullBed(DispatchObject props)
+    {
+        // Zero the origin before touching the extent: an extent's valid maximum is measured from the
+        // current position, so this guarantees the maximum read below is the full bed.
+        TrySetProperty(props, 6149, 0); // WIA_IPS_XPOS
+        TrySetProperty(props, 6150, 0); // WIA_IPS_YPOS
+
+        int maxWidth = TryGetPropertyMax(props, 6151);  // WIA_IPS_XEXTENT
+        int maxHeight = TryGetPropertyMax(props, 6152); // WIA_IPS_YEXTENT
+        if (maxWidth > 0) TrySetProperty(props, 6151, maxWidth);
+        if (maxHeight > 0) TrySetProperty(props, 6152, maxHeight);
+    }
+
     private static Task<T> RunOnStaThread<T>(Func<T> func)
     {
         TaskCompletionSource<T> tcs = new TaskCompletionSource<T>();
@@ -442,6 +498,9 @@ public static class ScanService
             catch (Exception ex) { tcs.SetException(ex); }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        // Background so an in-flight (or cancelled-but-still-returning) scan can't keep the
+        // process alive if the app is shut down before the WIA transfer returns.
+        thread.IsBackground = true;
         thread.Start();
         return tcs.Task;
     }
