@@ -107,7 +107,7 @@ public sealed partial class ScanDialog : ContentDialog
 
         _cancelCts = new CancellationTokenSource();
         CancellationToken token = _cancelCts.Token;
-        SetBusy(true, "Previewing...");
+        SetScanState(ScanUiState.Busy, "Previewing...");
         try
         {
             string? imagePath = await ScanService.PreviewAsync(SelectedScanner.DeviceId);
@@ -150,7 +150,9 @@ public sealed partial class ScanDialog : ContentDialog
         }
         finally
         {
-            SetBusy(false);
+            // On cancel this runs only once the scanner has finished returning to the start (the
+            // awaited preview transfer has returned), so it's safe to unlock the controls now.
+            SetScanState(ScanUiState.Idle);
         }
     }
 
@@ -174,7 +176,7 @@ public sealed partial class ScanDialog : ContentDialog
 
             _cancelCts = new CancellationTokenSource();
             CancellationToken token = _cancelCts.Token;
-            SetBusy(true, "Scanning...");
+            SetScanState(ScanUiState.Busy, "Scanning...");
 
             CropRegion? region = Crop.GetCropRegion();
             ScanCropRegion? scanCrop = region is null
@@ -184,20 +186,20 @@ public sealed partial class ScanDialog : ContentDialog
             string? pdfPath = await ScanService.ScanAsync(
                 SelectedScanner.DeviceId, SelectedDpi, SelectedColorMode, scanCrop);
 
+            // Reaching here means the WIA transfer has returned – i.e. the scanner has finished and
+            // its bar is back at the start. Only now is it honest to resolve the cancelled state.
             if (token.IsCancellationRequested)
             {
                 if (pdfPath != null) try { File.Delete(pdfPath); } catch { }
                 args.Cancel = true;
-                StatusText.Text = "Scan cancelled";
-                SetBusy(false);
+                SetScanState(ScanUiState.Idle, "Scan cancelled");
                 return;
             }
 
             if (pdfPath == null)
             {
                 args.Cancel = true;
-                StatusText.Text = "Scan cancelled";
-                SetBusy(false);
+                SetScanState(ScanUiState.Idle, "Scan cancelled");
                 return;
             }
 
@@ -208,8 +210,7 @@ public sealed partial class ScanDialog : ContentDialog
         catch (Exception ex)
         {
             args.Cancel = true;
-            StatusText.Text = $"Scan failed: {ex.Message}";
-            SetBusy(false);
+            SetScanState(ScanUiState.Idle, $"Scan failed: {ex.Message}");
         }
         finally
         {
@@ -217,11 +218,31 @@ public sealed partial class ScanDialog : ContentDialog
         }
     }
 
-    private void SetBusy(bool busy, string? status = null)
+    /// <summary>Visual state of the scan / preview workflow.</summary>
+    private enum ScanUiState
     {
+        /// <summary>No operation in progress; the controls are enabled.</summary>
+        Idle,
+
+        /// <summary>A scan or preview transfer is running and can still be cancelled.</summary>
+        Busy,
+
+        /// <summary>
+        /// Cancellation has been requested, but the scanner cannot stop mid-pass – its bar has to
+        /// travel back to the start before the in-flight WIA transfer returns. We stay here (busy
+        /// indicator up, controls locked) until the running scan/preview actually completes.
+        /// </summary>
+        Cancelling,
+    }
+
+    private void SetScanState(ScanUiState state, string? status = null)
+    {
+        bool busy = state != ScanUiState.Idle;
         ScanProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         CancelOperationButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-        CancelOperationButton.IsEnabled = busy;
+        // The cancel button only does something while actively scanning – once cancellation is
+        // under way there is nothing to do but wait for the scanner to return to the start.
+        CancelOperationButton.IsEnabled = state == ScanUiState.Busy;
         PreviewButton.IsEnabled = !busy && SelectedScanner != null;
         IsPrimaryButtonEnabled = !busy && SelectedScanner != null;
         CloseButtonText = busy ? "" : "Cancel";
@@ -229,14 +250,18 @@ public sealed partial class ScanDialog : ContentDialog
         DpiCombo.IsEnabled = !busy && DpiCombo.Items.Count > 0;
         ColorModeCombo.IsEnabled = !busy && ColorModeCombo.Items.Count > 0;
 
-        if (status != null) StatusText.Text = status;
-        else if (!busy) StatusText.Text = "";
+        if (status != null)
+            StatusText.Text = status;
     }
 
     private void OnCancelOperationClick(object sender, RoutedEventArgs e)
     {
         _cancelCts?.Cancel();
-        SetBusy(false, "Cancelled");
+        // The scanner can't stop mid-pass – its bar has to travel back to the start before the
+        // in-flight transfer returns. Reflect that honestly instead of pretending it's done: stay
+        // busy and show "Cancelling…" until the scan/preview handler observes completion.
+        SetScanState(ScanUiState.Cancelling,
+            "Cancelling – waiting for the scanner to return to the start...");
     }
 
     // ── Crop interaction ──────────────────────────────────────────
