@@ -1,3 +1,4 @@
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -35,6 +36,24 @@ public sealed partial class CropOverlay : UserControl
     public CropOverlay()
     {
         InitializeComponent();
+        CropCanvas.SizeChanged += OnCanvasSizeChanged;
+    }
+
+    /// <summary>
+    /// Re-anchors the crop rectangle to the stored normalized region whenever the canvas is
+    /// resized. The rectangle is positioned in absolute canvas pixels, so without this it would
+    /// drift off the image when the layout changes (e.g. the scan dialog's progress row appearing,
+    /// or the window being resized).
+    /// </summary>
+    private void OnCanvasSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (PreviewImage.Source is null || CropRect.Visibility == Visibility.Collapsed)
+            return;
+
+        if (_cropRegion is null)
+            InitializeToFull();
+        else
+            SetCropRegion(_cropRegion);
     }
 
     /// <summary>The image to display and crop.</summary>
@@ -114,6 +133,24 @@ public sealed partial class CropOverlay : UserControl
         return edges;
     }
 
+    /// <summary>Maps the hovered/dragged edge combination to the matching resize cursor.</summary>
+    private static InputSystemCursorShape CursorForEdges(DragEdge edges) => edges switch
+    {
+        DragEdge.Left | DragEdge.Top => InputSystemCursorShape.SizeNorthwestSoutheast,
+        DragEdge.Right | DragEdge.Bottom => InputSystemCursorShape.SizeNorthwestSoutheast,
+        DragEdge.Right | DragEdge.Top => InputSystemCursorShape.SizeNortheastSouthwest,
+        DragEdge.Left | DragEdge.Bottom => InputSystemCursorShape.SizeNortheastSouthwest,
+        DragEdge.Left or DragEdge.Right => InputSystemCursorShape.SizeWestEast,
+        DragEdge.Top or DragEdge.Bottom => InputSystemCursorShape.SizeNorthSouth,
+        _ => InputSystemCursorShape.Cross,
+    };
+
+    private void OnCropPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (_dragMode == DragMode.None)
+            CropCanvas.ResetCursor();
+    }
+
     private void OnCropPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (PreviewImage.Source is null) return;
@@ -125,10 +162,12 @@ public sealed partial class CropOverlay : UserControl
         if (_dragEdges != DragEdge.None)
         {
             _dragMode = DragMode.Resize;
+            CropCanvas.SetCursorShape(CursorForEdges(_dragEdges));
         }
         else
         {
             _dragMode = DragMode.Create;
+            CropCanvas.SetCursorShape(InputSystemCursorShape.Cross);
             _dragStart = pos;
             Canvas.SetLeft(CropRect, pos.X);
             Canvas.SetTop(CropRect, pos.Y);
@@ -140,9 +179,15 @@ public sealed partial class CropOverlay : UserControl
 
     private void OnCropPointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (_dragMode == DragMode.None) return;
-
         Point pos = e.GetCurrentPoint(CropCanvas).Position;
+
+        if (_dragMode == DragMode.None)
+        {
+            if (PreviewImage.Source is not null)
+                CropCanvas.SetCursorShape(CursorForEdges(HitTestEdges(pos)));
+            return;
+        }
+
         double canvasW = CropCanvas.ActualWidth;
         double canvasH = CropCanvas.ActualHeight;
         pos = new Point(Math.Clamp(pos.X, 0, canvasW), Math.Clamp(pos.Y, 0, canvasH));
