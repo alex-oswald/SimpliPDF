@@ -1,3 +1,4 @@
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SimpliPDF.Dialogs;
@@ -24,6 +25,13 @@ public sealed partial class MainWindow : Window
     // Must be stored as a field to prevent GC collection of the delegate
     private readonly SUBCLASSPROC _subclassProc;
 
+    // Guards for the unsaved-changes exit flow. AppWindow.Closing can't be awaited, so when there
+    // are unsaved changes we cancel the first close, ask the user asynchronously, then re-issue the
+    // close with _forceClose set. _isConfirmingClose stops repeated close attempts from stacking
+    // multiple dialogs while the first one is still showing.
+    private bool _forceClose;
+    private bool _isConfirmingClose;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -37,6 +45,9 @@ public sealed partial class MainWindow : Window
         string iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
         AppWindow.SetIcon(iconPath);
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1100, 750));
+
+        // Prompt to save when closing with unsaved changes.
+        AppWindow.Closing += OnAppWindowClosing;
 
         // Install subclass to enforce minimum window size
         _subclassProc = SubclassProc;
@@ -64,6 +75,85 @@ public sealed partial class MainWindow : Window
         {
             ScanBtn.IsEnabled = true;
             ViewModel.StatusText = "Scanner discovery failed";
+        }
+    }
+
+    /// <summary>
+    /// Intercepts window close to guard against losing unsaved edits. The close is cancelled up
+    /// front (the event can't be awaited), the user is asked whether to save, and the window is then
+    /// closed again with <see cref="_forceClose"/> set once that choice is made.
+    /// </summary>
+    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        // A confirmed close (Save/Don't save) re-enters here — let it through.
+        if (_forceClose) return;
+
+        // Nothing to lose: no edits, or an empty workspace with nothing worth saving.
+        if (!ViewModel.HasUnsavedChanges || ViewModel.Pages.Count == 0) return;
+
+        // Stop this close; we'll decide asynchronously below.
+        args.Cancel = true;
+
+        // Don't stack another dialog if the user pokes the close button again while one is up.
+        if (_isConfirmingClose) return;
+        _isConfirmingClose = true;
+        try
+        {
+            ContentDialog dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "Save changes?",
+                Content = "You have unsaved changes. Do you want to save them before exiting?",
+                PrimaryButtonText = "Save",
+                SecondaryButtonText = "Don't save",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+            };
+
+            ContentDialogResult result = await dialog.ShowAsync();
+            switch (result)
+            {
+                case ContentDialogResult.Primary:
+                    // Only exit once the save actually succeeds; a cancelled picker or failed save
+                    // keeps the window open with the changes intact.
+                    if (await TrySaveAsync())
+                    {
+                        _forceClose = true;
+                        Close();
+                    }
+                    break;
+
+                case ContentDialogResult.Secondary:
+                    _forceClose = true;
+                    Close();
+                    break;
+
+                    // Close button (Cancel) — do nothing, the window stays open.
+            }
+        }
+        finally
+        {
+            _isConfirmingClose = false;
+        }
+    }
+
+    /// <summary>Prompts for a destination and saves the merged document. Returns true only when the
+    /// document was written to disk (the dirty flag cleared), false if the user cancelled or the
+    /// save failed.</summary>
+    private async Task<bool> TrySaveAsync()
+    {
+        if (ViewModel.Pages.Count == 0) return true;
+        try
+        {
+            string? path = Win32FileDialog.SavePdfFile(Hwnd);
+            if (path == null) return false;
+            await ViewModel.SaveToAsync(path);
+            return !ViewModel.HasUnsavedChanges;
+        }
+        catch (Exception ex)
+        {
+            ViewModel.StatusText = $"Save error: {ex.Message}";
+            return false;
         }
     }
 
@@ -162,7 +252,7 @@ public sealed partial class MainWindow : Window
             ViewModel.IsLoading = true;
             try
             {
-                await ViewModel.LoadPdfAsync(dialog.ScannedPdfPath);
+                await ViewModel.LoadPdfAsync(dialog.ScannedPdfPath, markUnsaved: true);
                 ViewModel.StatusText = "Scanned page added";
             }
             finally
@@ -178,14 +268,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnSaveClick(object sender, RoutedEventArgs e)
     {
-        if (ViewModel.Pages.Count == 0) return;
-        try
-        {
-            string? path = Win32FileDialog.SavePdfFile(Hwnd);
-            if (path == null) return;
-            await ViewModel.SaveToAsync(path);
-        }
-        catch (Exception ex) { ViewModel.StatusText = $"Save error: {ex.Message}"; }
+        await TrySaveAsync();
     }
 
     private async void OnPrintClick(object sender, RoutedEventArgs e)
