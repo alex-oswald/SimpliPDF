@@ -21,6 +21,21 @@
   <ItemGroup>
     <Content Include="Assets\*.png" />
     <Content Include="Assets\AppIcon.ico" />
+
+    <!-- Deploy the loose app-icon assets next to the unpackaged .exe. `dotnet build` copies
+         everything under Assets\ into the output folder via the MSIX tooling, but `dotnet publish`
+         (what publish-aot.yml uploads and what the MSI harvests) does not, so published/installed
+         builds shipped with no Assets\ folder. That broke the two icons loaded from disk at
+         runtime: AppWindow.SetIcon reads Assets\AppIcon.ico by absolute path (window/taskbar icon)
+         and the title bar resolves ms-appx:///Assets/AppIcon.png from the Assets\AppIcon.scale-*.png
+         files. CopyToOutputDirectory makes them flow into the publish output too. Only the AppIcon
+         assets are copied — the Square/Wide/Splash/Store logos are MSIX-only and unused unpackaged. -->
+    <Content Update="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Assets\AppIcon.scale-100.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Assets\AppIcon.scale-125.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Assets\AppIcon.scale-150.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Assets\AppIcon.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Assets\AppIcon.scale-400.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
