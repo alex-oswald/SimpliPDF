@@ -80,8 +80,6 @@ jobs:
             --self-contained true `
             -p:WindowsAppSDKSelfContained=true `
             -p:WindowsPackageType=None `
-            -p:DebugType=none `
-            -p:DebugSymbols=false `
             -p:Version=${{ steps.version.outputs.release_version }} `
             -p:AssemblyVersion=${{ steps.version.outputs.msi_version }} `
             -p:FileVersion=${{ steps.version.outputs.msi_version }} `
