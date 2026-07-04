@@ -276,7 +276,7 @@ public sealed partial class MainWindow : Window
         if (ViewModel.Pages.Count == 0) return;
         try
         {
-            PrintHelper helper = new PrintHelper(Hwnd);
+            PrintHelper helper = new PrintHelper(Hwnd, PrintCanvas);
             await helper.PrintAsync(ViewModel.Pages.ToList());
         }
         catch (Exception ex)
