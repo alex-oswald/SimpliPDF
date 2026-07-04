@@ -115,5 +115,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SimpliPDF-aot-${{ matrix.platform }}
+          name: SimpliPDF-${{ matrix.platform }}
           path: SimpliPDF/bin/Release/${{ env.TFM }}/win-${{ matrix.platform }}/publish/
