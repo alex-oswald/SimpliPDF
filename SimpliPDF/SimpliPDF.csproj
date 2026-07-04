@@ -86,5 +86,20 @@
          errors out otherwise. -->
     <PublishTrimmed Condition="'$(SimpliPdfUseAot)' == 'true'">true</PublishTrimmed>
     <PublishTrimmed Condition="'$(PublishTrimmed)' == ''">false</PublishTrimmed>
+
+    <!-- Don't ship debug symbols with the Native AOT publish. On Windows the AOT compiler emits a
+         ~37 MB native SimpliPDF.pdb next to the .exe, and because the MSI harvests the whole publish
+         folder wholesale (installer\SimpliPDF.wxs) that PDB bloated every install for no end-user
+         benefit. Setting DebugType=none makes the ILCompiler targets default NativeDebugSymbols to
+         false, which drops both the ILC `-g` flag and link.exe's `/DEBUG` switch, so no native PDB
+         is produced (the two are gated on NativeDebugSymbols in Microsoft.NETCore.Native*.targets);
+         DebugSymbols=false suppresses the managed PDB as well. This is the single source of truth
+         for symbol stripping — build.ps1 (-Publish/-Msi), the release workflow, and a plain
+         `dotnet publish -p:PublishProfile=win-x64|win-arm64` all inherit it. Only the AOT publish is
+         affected: the inner-loop `dotnet build`, Debug, and the x86 self-contained build keep their
+         symbols. Set DebugType back to `portable` if you ever need to symbolicate a native crash
+         dump from a release build. -->
+    <DebugType Condition="'$(SimpliPdfUseAot)' == 'true'">none</DebugType>
+    <DebugSymbols Condition="'$(SimpliPdfUseAot)' == 'true'">false</DebugSymbols>
   </PropertyGroup>
 </Project>

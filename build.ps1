@@ -66,6 +66,18 @@ $root = $PSScriptRoot
 $project = Join-Path $root "SimpliPDF\SimpliPDF.csproj"
 $tfm = "net10.0-windows10.0.26100.0"
 
+# Native AOT's link step shells out to the VC toolchain via the ILCompiler's findvcvarsall.bat,
+# which calls vcvarsall.bat. Some Visual Studio layouts (notably VS Insiders) invoke a bare
+# `vswhere` from inside vcvarsall; if the VS Installer directory that holds vswhere.exe isn't on
+# PATH, that lookup fails and its "not recognized" error leaks into the captured tool output,
+# corrupting the detected linker path (link fails with MSB3073 / exit code 123). vswhere always
+# lives at this fixed location, so put it on PATH up front to keep AOT publishes robust.
+$vsInstaller = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer"
+if ((Test-Path (Join-Path $vsInstaller "vswhere.exe")) -and
+    -not (Get-Command vswhere -ErrorAction SilentlyContinue)) {
+    $env:PATH = "$vsInstaller;$env:PATH"
+}
+
 # -ComSmokeTest is a standalone action: publish the headless COM harness for the host
 # architecture and run it, surfacing any Native-AOT COM/marshalling regression as a non-zero
 # exit code. It reproduces the shipped runtime (Native AOT in Release) without launching the UI.
