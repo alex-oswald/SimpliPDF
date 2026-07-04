@@ -79,6 +79,28 @@ jobs:
           }
           Write-Host "Verified: SimpliPDF.pri present ($([math]::Round($pri.Length / 1KB)) KB)."
 
+      # The window/taskbar icon (AppWindow.SetIcon reads Assets\AppIcon.ico by absolute path) and
+      # the title bar icon (ms-appx:///Assets/AppIcon.png, which resolves the Assets\AppIcon.scale-*.png
+      # candidates) both load their files from disk at runtime. `dotnet build` lays the Assets folder
+      # out automatically, but `dotnet publish` only does so because the AppIcon assets carry
+      # CopyToOutputDirectory in SimpliPDF.csproj -- without it the published/MSI app shipped with no
+      # Assets folder and fell back to the default icon. Guard that exact regression.
+      - name: Verify app icon assets are deployed
+        shell: pwsh
+        run: |
+          $pub = "SimpliPDF/bin/Release/$env:TFM/win-${{ matrix.platform }}/publish"
+          $needed = @(
+            'Assets/AppIcon.ico',
+            'Assets/AppIcon.scale-100.png',
+            'Assets/AppIcon.scale-200.png'
+          )
+          foreach ($rel in $needed) {
+            if (-not (Test-Path "$pub/$rel")) {
+              throw "$rel is missing from the publish output -> the window/taskbar/title bar icon would fall back to the default. Ensure the AppIcon assets have CopyToOutputDirectory set in SimpliPDF.csproj."
+            }
+          }
+          Write-Host "Verified: AppIcon assets present in publish output."
+
       # Actually RUN a Native AOT binary and exercise the COM paths that silently broke before
       # (Win32 file dialogs + WIA scanner). Publishing alone never caught the failure because the
       # app was never launched. The x64 runner can execute the x64 native harness; the arm64 leg is
