@@ -66,6 +66,7 @@
         <!-- Contextual selection toolbar — appears above the grid when pages are selected -->
         <CommandBar x:Name="SelectionBar" Grid.Row="2" DefaultLabelPosition="Right" IsOpen="False"
                     Visibility="Collapsed"
+                    VerticalContentAlignment="Center"
                     Background="{ThemeResource SolidBackgroundFillColorSecondaryBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="0,1,0,1">
@@ -151,7 +152,10 @@
                       Padding="12">
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:PdfPageItem">
-                        <Grid Width="{x:Bind CardWidth, Mode=OneWay}" Padding="4" RowSpacing="4"
+                        <!-- Fixed-size card with a square thumbnail box. Keeping every card the same
+                             size means the GridView's uniform cells never clip a rotated page, and the
+                             page simply rotates in place (a square footprint is unchanged by rotation). -->
+                        <Grid Width="196" Padding="4" RowSpacing="4"
                               Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                               BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                               BorderThickness="1" CornerRadius="4">
@@ -162,7 +166,8 @@
 
                             <Image Source="{x:Bind DisplayThumbnail, Mode=OneWay}"
                                    Stretch="Uniform"
-                                   Height="{x:Bind ImageHeight, Mode=OneWay}"
+                                   Width="180"
+                                   Height="180"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    RenderTransformOrigin="0.5,0.5">

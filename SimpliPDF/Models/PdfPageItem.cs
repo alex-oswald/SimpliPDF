@@ -10,9 +10,6 @@ public partial class PdfPageItem : ObservableObject
     public required string FileName { get; init; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLandscape))]
-    [NotifyPropertyChangedFor(nameof(CardWidth))]
-    [NotifyPropertyChangedFor(nameof(ImageHeight))]
     public partial int Rotation { get; set; }
 
     [ObservableProperty]
@@ -33,10 +30,6 @@ public partial class PdfPageItem : ObservableObject
     public bool HasCrop => Crop is not null;
 
     public string DisplayLabel => $"{FileName} – p.{OriginalPageIndex + 1}";
-
-    public bool IsLandscape => Rotation % 180 != 0;
-    public double CardWidth => IsLandscape ? 200 : 150;
-    public double ImageHeight => IsLandscape ? 130 : 180;
 
     /// <summary>Creates an independent copy that renders the same source page, preserving the
     /// user's rotation and crop. Thumbnails are shared so the duplicate appears immediately.</summary>
