@@ -28,10 +28,10 @@
 
 .PARAMETER ComSmokeTest
     If set, publishes and runs the standalone COM smoke test (tools\ComSmokeTest)
-    for the host architecture, then exits. It activates the two COM paths that
-    break under Native AOT (the Win32 file dialogs and the WIA scanner) and exits
-    non-zero if either fails. Release publishes the harness with Native AOT — the
-    exact runtime that shipped — so it needs the "Desktop development with C++"
+    for the host architecture, then exits. It activates the COM paths that break
+    under Native AOT (the Win32 file dialogs, the WIA scanner, and the print interop)
+    and exits non-zero if any fails. Release publishes the harness with Native AOT —
+    the exact runtime that shipped — so it needs the "Desktop development with C++"
     workload; Debug runs the same code under JIT (no C++ toolchain required), which
     exercises the identical ComWrappers activation path. Ignores the other switches.
 

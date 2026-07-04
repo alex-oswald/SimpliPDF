@@ -9,3 +9,5 @@ DefSubclassProc
 RemoveWindowSubclass
 MINMAXINFO
 GetDpiForWindow
+WindowsCreateString
+WindowsDeleteString

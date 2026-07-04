@@ -32,6 +32,7 @@
   <ItemGroup>
     <Compile Include="..\..\SimpliPDF\Interop\ComInterop.cs" Link="Interop\ComInterop.cs" />
     <Compile Include="..\..\SimpliPDF\Interop\Dispatch.cs" Link="Interop\Dispatch.cs" />
+    <Compile Include="..\..\SimpliPDF\Interop\PrintManagerInteropNative.cs" Link="Interop\PrintManagerInteropNative.cs" />
     <Compile Include="..\..\SimpliPDF\Interop\ShellDialogs.cs" Link="Interop\ShellDialogs.cs" />
     <Compile Include="..\..\SimpliPDF\Helpers\Win32FileDialog.cs" Link="Helpers\Win32FileDialog.cs" />
   </ItemGroup>
