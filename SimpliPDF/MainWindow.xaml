@@ -187,6 +187,13 @@
                     </DataTemplate>
                 </GridView.ItemTemplate>
             </GridView>
+
+            <!-- Off-screen host for print pages. The print system can only rasterize UIElements
+                 that are in the live visual tree and have gone through layout, so PrintHelper
+                 parents each page here (invisible and non-interactive) before handing it to the
+                 print preview / print job. A Canvas reports a zero layout size, so it never
+                 disturbs the surrounding content even while it holds full-page children. -->
+            <Canvas x:Name="PrintCanvas" Opacity="0" IsHitTestVisible="False" />
         </Grid>
 
         <!-- Status Bar -->
