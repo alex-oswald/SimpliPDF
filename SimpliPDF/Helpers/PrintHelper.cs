@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Printing;
+using SimpliPDF.Interop;
 using SimpliPDF.Models;
 using Windows.Graphics.Printing;
 
@@ -37,7 +38,10 @@ public class PrintHelper
 
         try
         {
-            await PrintManagerInterop.ShowPrintUIForWindowAsync(_hwnd);
+            // ShowPrintUIForWindowAsync is driven through PrintManagerInteropNative rather than the
+            // CsWinRT projection: the projected overload returns IAsyncOperation<bool>, whose helper
+            // type cannot be built under Native AOT (see PrintManagerInteropNative for the full story).
+            await PrintManagerInteropNative.ShowPrintUIForWindowAsync(_hwnd);
         }
         finally
         {
