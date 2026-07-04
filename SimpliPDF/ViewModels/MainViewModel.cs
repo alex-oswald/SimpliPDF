@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SimpliPDF.Helpers;
 using SimpliPDF.Models;
@@ -24,16 +25,32 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsLoading { get; set; }
 
+    /// <summary>
+    /// True when the loaded pages diverge from what is saved on disk — i.e. the user has scanned a
+    /// page or edited a loaded one (rotate, crop, delete, duplicate, reorder). Cleared by a full
+    /// save. Simply opening or dropping PDFs from disk leaves it false, so an unedited document
+    /// never prompts on exit.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool HasUnsavedChanges { get; set; }
+
     public MainViewModel()
     {
-        Pages.CollectionChanged += (_, _) =>
+        Pages.CollectionChanged += (_, e) =>
         {
             HasPages = Pages.Count > 0;
+
+            // A drag-reorder within the grid rearranges the bound collection in place; that changes
+            // the document that would be saved, so treat it as an unsaved edit. Adds/removes are
+            // driven by explicit operations (load, delete, duplicate) that manage the flag directly.
+            if (e.Action == NotifyCollectionChangedAction.Move)
+                HasUnsavedChanges = true;
+
             UpdateStatus();
         };
     }
 
-    public async Task LoadPdfAsync(string filePath)
+    public async Task LoadPdfAsync(string filePath, bool markUnsaved = false)
     {
         int pageCount;
         try
@@ -68,6 +85,11 @@ public partial class MainViewModel : ObservableObject
                 // Thumbnail generation failed — leave null
             }
         }
+
+        // Scanned pages have no on-disk counterpart the user has saved, so adding them counts as an
+        // unsaved change. Opening/dropping existing PDFs (markUnsaved: false) does not.
+        if (markUnsaved && pageCount > 0)
+            HasUnsavedChanges = true;
     }
 
     public async Task SaveToAsync(string outputPath)
@@ -77,6 +99,7 @@ public partial class MainViewModel : ObservableObject
         {
             List<PreparedPage> prepared = await PreparePagesAsync(Pages.ToList());
             await Task.Run(() => _pdfService.MergeAndSave(prepared, outputPath));
+            HasUnsavedChanges = false;
             StatusText = $"Saved to {Path.GetFileName(outputPath)}";
         }
         catch (Exception ex)
@@ -88,14 +111,19 @@ public partial class MainViewModel : ObservableObject
     public void DeletePages(IList<object> selectedItems)
     {
         List<PdfPageItem> pages = selectedItems.OfType<PdfPageItem>().ToList();
+        if (pages.Count == 0) return;
         foreach (PdfPageItem? p in pages)
             Pages.Remove(p);
+        HasUnsavedChanges = true;
     }
 
     public void RotatePages(IList<object> selectedItems)
     {
-        foreach (PdfPageItem p in selectedItems.OfType<PdfPageItem>())
+        List<PdfPageItem> pages = selectedItems.OfType<PdfPageItem>().ToList();
+        if (pages.Count == 0) return;
+        foreach (PdfPageItem p in pages)
             p.Rotation = (p.Rotation + 90) % 360;
+        HasUnsavedChanges = true;
     }
 
     public void DuplicatePages(IList<object> selectedItems)
@@ -111,11 +139,13 @@ public partial class MainViewModel : ObservableObject
             if (index < 0) continue;
             Pages.Insert(index + 1, page.Clone());
         }
+        HasUnsavedChanges = true;
     }
 
     public async Task ApplyCropAsync(PdfPageItem page, CropRegion? crop)
     {
         page.Crop = crop;
+        HasUnsavedChanges = true;
         try
         {
             if (crop is null)
